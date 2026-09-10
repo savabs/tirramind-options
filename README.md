@@ -9,6 +9,8 @@ before the product does.
 - `src/tmo/payments/` — Paddle billing for the Terminal subscription, and the
   webhook endpoint that provisions and revokes access.
 - `products/terminal/` — what the subscription is, and what it is not.
+- `src/tmo/service/` — the fit service: an arbitrage-checked surface over HTTP,
+  served warm. `deploy/` puts it on a box.
 
 The surface engine is [voltorch](https://pypi.org/project/voltorch/):
 arbitrage-checked eSSVI with per-slice SVI refinement. Every number here ships

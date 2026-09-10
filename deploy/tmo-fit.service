@@ -1,0 +1,37 @@
+# The fit service. Runs as its own unlucky user, on loopback, behind a proxy.
+#
+# Restart=always with a backoff: the one failure mode seen in practice is
+# Deribit refusing a request, and the service already survives that by serving
+# the last good surface. A crash loop that hammers the venue would be worse
+# than being down, hence the delay.
+[Unit]
+Description=TirraMind Options fit service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=tmo
+Group=tmo
+WorkingDirectory=/opt/tmo
+Environment=PYTHONPATH=/opt/tmo/src
+Environment=TMO_SERVICE_HOST=127.0.0.1
+Environment=TMO_SERVICE_PORT=8080
+ExecStart=/opt/tmo/.venv/bin/python -m tmo.service.app
+Restart=always
+RestartSec=10
+
+# The service reads a public API and writes nothing. Give it nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target
