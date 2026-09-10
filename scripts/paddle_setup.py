@@ -144,9 +144,18 @@ def main(argv=None) -> int:
     # let the next person wonder why nothing happened when they clicked.
     if all_prices:
         try:
-            client._call("POST", "/transactions",
-                         body={"items": [{"price_id": all_prices[0]["id"], "quantity": 1}]})
+            probe = client._call("POST", "/transactions",
+                                 body={"items": [{"price_id": all_prices[0]["id"], "quantity": 1}]})
             print("\ncheckout: a default payment link is set; checkouts can open")
+            # Paddle offers no read-only way to ask, so the probe has to create a
+            # draft. Cancel it again: a billing account should not slowly fill
+            # with abandoned drafts because a status script kept running.
+            txn = (probe.get("data") or {}).get("id")
+            if txn:
+                try:
+                    client._call("PATCH", f"/transactions/{txn}", body={"status": "canceled"})
+                except PaddleAPIError as cleanup:
+                    print(f"  (left draft {txn} behind: {cleanup})")
         except PaddleAPIError as exc:
             code = (exc.body or {}).get("error", {}).get("code") if isinstance(exc.body, dict) else None
             if code == "transaction_default_checkout_url_not_set":
