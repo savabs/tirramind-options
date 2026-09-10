@@ -1,0 +1,24 @@
+{
+  "tier": "terminal",
+  "name": "Terminal",
+  "statement_descriptor": "TIRRAMIND TERMINAL",
+  "billing": "monthly",
+  "prices": [
+    {"currency": "INR", "amount_minor": 49900, "display": "₹499 / month"},
+    {"currency": "USD", "amount_minor": 1900, "display": "$19 / month"}
+  ],
+  "included": [
+    "Arbitrage-checked volatility surface for BTC and ETH, with its per-expiry error published",
+    "NSE chains through the user's own broker session, nothing stored on our side",
+    "Positions with delta, gamma, vega and theta attribution that reconciles to realised profit and loss",
+    "Executable-arbitrage monitor",
+    "The user's own edge measured with a confidence interval"
+  ],
+  "not_included": [
+    "Recommendations, signals, advice, or anything a research analyst licence would be needed for",
+    "Market data redistribution: NSE data flows through the subscriber's own broker session",
+    "The broker's own data subscription, which the subscriber pays their broker directly"
+  ],
+  "refund_policy": "A full refund revokes access immediately. A partial refund does not.",
+  "cancellation_policy": "Access continues to the end of the period already paid for."
+}
