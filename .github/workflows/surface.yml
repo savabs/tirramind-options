@@ -1,0 +1,73 @@
+# The public Deribit tab, refit every 30 minutes.
+#
+# It deploys to Pages as a build artifact rather than committing the rendered
+# page back to the repository. Forty-eight commits a day of a 60 KB file would
+# bury the ledger's own history in noise within a week, and the page is a
+# derived artefact: the ledger is the record, this is a view.
+name: surface
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["src/tmo/page.py", "src/tmo/service/**", ".github/workflows/surface.yml"]
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      - name: Render
+        run: PYTHONPATH=src python -m tmo.page site/index.html
+
+      - name: Verify the page actually says something
+        # The gate. A page that rendered is not evidence; a page carrying a
+        # real surface with a real error is. An empty or error-free-looking
+        # page must fail here rather than ship.
+        run: |
+          set -eu
+          python - <<'PY'
+          import re, sys
+          html = open("site/index.html", encoding="utf-8").read()
+          checks = {
+              "has both currencies": 'data-cur="BTC"' in html and 'data-cur="ETH"' in html,
+              "carries its data": "window.__SURFACES__={" in html,
+              "quotes a real error": re.search(r'class="value">\d+\.\d\d<', html) is not None,
+              "fetches nothing": not re.search(r"<script[^>]+\bsrc=", html),
+          }
+          for name, ok in checks.items():
+              print(("PASS  " if ok else "FAIL  ") + name)
+          sys.exit(0 if all(checks.values()) else 1)
+          PY
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

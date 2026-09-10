@@ -4,6 +4,7 @@ __pycache__/
 .tmo/
 *.pyc
 .pytest_cache/
+site/index.html
 
 # Working notes stay local. The objects are public; the notebook is not.
 CLAUDE.md
