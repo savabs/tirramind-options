@@ -11,8 +11,9 @@ before the product does.
 - `scripts/paddle_*.py` — set up the sandbox, render a test checkout, and replay
   what Paddle actually delivered through the handler. Credentials come from a
   local `.env` that is not in this repository.
-- [`web/`](web/README.md) — sign in with Google, at the edge. Identity only; what
-  someone has paid for is answered where the subscriber record lives.
+- [`web/`](web/README.md) — sign-in and billing at the edge: Google identity, the
+  Paddle webhook, and the subscriber record. It runs whether or not any other
+  machine is up.
 - `products/terminal/` — what the subscription is, and what it is not.
 - `research/` — measurements, including the negative ones. Everything here is
   reproducible from the script beside it.

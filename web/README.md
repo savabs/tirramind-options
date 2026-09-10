@@ -1,11 +1,17 @@
-# Sign-in
+# Sign-in and billing
 
-Identity only. This deployment establishes who someone is and issues a session;
-it never decides what they have paid for. That answer comes from the service that
-owns the subscriber record, where the rules about grace windows and refunds are
-already written and tested. A second copy of those rules here would be a second
-thing to keep correct about money, and the copy nobody watches is the one that
-drifts.
+This deployment establishes who someone is, receives Paddle's webhooks, holds the
+subscriber record in D1, and answers what a person may use.
+
+It did not start that way. Entitlement was deliberately kept off the edge so the
+money rules would exist once, in Python. Then the machine the webhook ran on went
+dark, and a refund that cannot reach us is a customer keeping access they have
+been repaid for. Moving the webhook moves the record, and the rules read the
+record, so the rules followed.
+
+So two implementations of those rules now exist. `lib/rules.json` is the answer
+to that: a table of cases both test suites read, so neither language can change a
+rule without the other failing. If you change a rule, change the table first.
 
 ## The flow
 
@@ -14,8 +20,8 @@ drifts.
 2. `/auth/callback` checks the state, exchanges the code, reads the id_token, and
    sets a signed session cookie for twelve hours.
 3. `/auth/me` says who is signed in. `/auth/logout` drops the cookie.
-4. The Terminal calls the fit service's `/me` with that session. The fit service
-   matches the verified email against the subscriber record and answers.
+4. `/auth/entitlement` matches the verified email, or an explicitly linked
+   account, against the subscriber record and says what they may use.
 
 Nobody chooses a password, so there is no password for us to lose.
 
@@ -49,6 +55,14 @@ wrangler pages secret put SESSION_SECRET       --project-name=tirramind-options
 
 `SESSION_SECRET` must be the same value the fit service reads from
 `TMO_SESSION_SECRET`: one side signs, the other verifies.
+
+Billing needs three more: `PADDLE_WEBHOOK_SECRET` from the notification
+destination, `PADDLE_API_KEY` so a subscriber's email can be resolved (no webhook
+payload carries one, and sign-in matches on it), and `TMO_TIER_PRICE_MAP` as a
+plain var, since a price that is not listed provisions nothing.
+
+Cloudflare Pages only picks up secret and var changes on a **new deployment**.
+Setting one and expecting a live deployment to see it does not work.
 
 The Google OAuth client is created in the Google Cloud console, as a Web
 application, with the redirect URI set to `https://<host>/auth/callback`.
