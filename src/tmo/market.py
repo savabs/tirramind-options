@@ -13,6 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import torch
+import voltorch
 from voltorch import BlackScholes, fit_chain
 from voltorch.deribit import fetch_chain
 
@@ -82,7 +83,12 @@ def state(currency: str, *, snapshot_root: str = store.DEFAULT_ROOT,
     chain = fetch_chain(currency)
     if chain.empty:
         raise RuntimeError(f"{currency}: Deribit returned no live options")
-    meta = {"currency": currency, "n_quotes": int(len(chain))}
+    # The engine version travels with the row. The published error is a
+    # property of the engine as much as of the market, and a reader comparing
+    # two rows months apart has no other way to know the rule changed under
+    # them: 0.2.1 narrowed the calendar check and moved the error by a third.
+    meta = {"currency": currency, "engine": "voltorch", "engine_version": voltorch.__version__,
+            "n_quotes": int(len(chain))}
     if capture:
         path, digest, status = store.snapshot(f"deribit_{currency.lower()}", chain,
                                               root=snapshot_root)

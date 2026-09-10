@@ -17,6 +17,8 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+import voltorch
+
 # Categorical slots 1 and 2 of the reference palette, validated for both modes:
 # worst adjacent CVD delta-E 24.7 light and 26.8 dark against an 8 target, and
 # both clear 3:1 on their surface. Our surface is the subject, the venue's marks
@@ -416,7 +418,7 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
   is. No key, no vendor feed, nothing you cannot recompute. The rest of this category
   ships a picture and a footnote saying the numbers are estimates.</p>
   <div class="stamp">Generated {stamp} · refit every 30 minutes ·
-    engine <a href="https://pypi.org/project/voltorch/">voltorch</a> 0.2.0 ·
+    engine <a href="https://pypi.org/project/voltorch/">voltorch</a> {voltorch.__version__} ·
     <a href="https://github.com/savabs/tirramind-options">source</a></div>
 </header>
 <div class="tabs" role="tablist">{tabs}</div>

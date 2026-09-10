@@ -56,6 +56,24 @@ profit and loss in USD, and it starts negative by the cost of getting in.
 
 Negative results stay published.
 
+## A change in the engine, on the record
+
+The daily fit is produced by [voltorch](https://pypi.org/project/voltorch/), and
+its version is recorded on every row from 2026-09-11 onwards. It matters: the
+published error is a property of the engine as much as of the market.
+
+**2026-09-10, voltorch 0.2.0 to 0.2.1.** The engine rejected a refined expiry
+whenever its total variance dipped below the previous expiry's anywhere out to
+three times the quoted range, which reaches a strike at 13% of the forward.
+Measured over eight chains, that rejected 23 slices and none of them failed the
+same test where both expiries actually have quotes. 0.2.1 checks where the quotes
+are, and claims no more than it checks. The published error fell from about 0.75
+to about 0.70 volatility points and its run-to-run spread halved.
+
+Rows written before that change carry the old rule. The fit rows themselves hold
+the full report, including the guarantee text, so which rule produced a given row
+is readable from the row. The working is in `research/fit_stability.md`.
+
 ## Running it
 
 ```bash
