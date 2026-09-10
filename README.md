@@ -8,6 +8,9 @@ before the product does.
 - `src/tmo/` — the daily job: fetch, fit, step every registered strategy, mark.
 - `src/tmo/payments/` — Paddle billing for the Terminal subscription, and the
   webhook endpoint that provisions and revokes access.
+- `scripts/paddle_*.py` — set up the sandbox, render a test checkout, and replay
+  what Paddle actually delivered through the handler. Credentials come from a
+  local `.env` that is not in this repository.
 - `products/terminal/` — what the subscription is, and what it is not.
 - `research/` — measurements, including the negative ones. Everything here is
   reproducible from the script beside it.

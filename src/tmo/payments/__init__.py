@@ -16,6 +16,7 @@ there fixed and pinned by tests:
      allocate an arbitrary amount of memory. The body is now capped first.
 """
 
+from .client import PaddleAPIError, PaddleClient
 from .config import PaddleConfig, PaddleConfigError
 from .event_ledger import ProcessedEventLedger
 from .handler import PaddleWebhookHandler
@@ -24,6 +25,7 @@ from .tiers import UNKNOWN_PRICE, resolve_tier
 from .webhook import WebhookVerificationError, is_verified, verify_webhook_signature
 
 __all__ = [
+    "PaddleAPIError", "PaddleClient",
     "PaddleConfig", "PaddleConfigError", "PaddleWebhookHandler",
     "ProcessedEventLedger", "SubscriberStore", "UNKNOWN_PRICE", "resolve_tier",
     "WebhookVerificationError", "is_verified", "verify_webhook_signature",
