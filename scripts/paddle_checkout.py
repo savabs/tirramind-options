@@ -22,6 +22,7 @@ import functools
 import http.server
 import os
 import socketserver
+import ssl
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
@@ -87,6 +88,13 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--serve", action="store_true", help="serve local/ so the overlay can open")
     ap.add_argument("--port", type=int, default=8123)
+    # Paddle stores the default payment link as https even when http was typed,
+    # so the page has to be reachable over https for the origin to match. A
+    # self-signed certificate is fine for a sandbox on your own machine; the
+    # browser will ask you to accept it once.
+    ap.add_argument("--https", action="store_true", help="serve over https with a local certificate")
+    ap.add_argument("--cert", default=os.path.join("local", "dev-cert.pem"))
+    ap.add_argument("--key", default=os.path.join("local", "dev-key.pem"))
     a = ap.parse_args(argv)
     load_dotenv()
     cfg = PaddleConfig.from_env()
@@ -114,7 +122,19 @@ def main(argv=None) -> int:
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory="local")
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer(("127.0.0.1", a.port), handler) as httpd:
-        url = f"http://localhost:{a.port}/checkout.html"
+        scheme = "http"
+        if a.https:
+            if not (os.path.exists(a.cert) and os.path.exists(a.key)):
+                print(f"missing {a.cert} or {a.key}. Generate them with:\n"
+                      f'  openssl req -x509 -newkey rsa:2048 -nodes -days 365 \\\n'
+                      f'    -keyout {a.key} -out {a.cert} -subj "/CN=localhost" \\\n'
+                      f'    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"')
+                return 2
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(a.cert, a.key)
+            httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+            scheme = "https"
+        url = f"{scheme}://localhost:{a.port}/checkout.html"
         print(f"\nserving on {url}")
         print("This origin must match the account's default payment link in the\n"
               "Paddle dashboard, or the overlay will not open. Ctrl-C when done.")
