@@ -11,3 +11,6 @@ site/index.html
 CLAUDE.md
 docs/
 tasks/
+web/node_modules/
+web/.dev.vars
+web/.wrangler/

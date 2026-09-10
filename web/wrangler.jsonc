@@ -1,0 +1,12 @@
+{
+  // Sign-in for the Terminal. Identity only: this deployment never decides what
+  // anyone has paid for, so it needs no database and holds no subscriber state.
+  "name": "tirramind-options",
+  "compatibility_date": "2026-09-01",
+  "pages_build_output_dir": "public"
+
+  // Secrets are set out of band, never in this file:
+  //   wrangler pages secret put GOOGLE_CLIENT_ID     --project-name=tirramind-options
+  //   wrangler pages secret put GOOGLE_CLIENT_SECRET --project-name=tirramind-options
+  //   wrangler pages secret put SESSION_SECRET       --project-name=tirramind-options
+}

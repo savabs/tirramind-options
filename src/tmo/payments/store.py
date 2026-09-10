@@ -227,6 +227,50 @@ class SubscriberStore:
         entry = self._data.get(subscription_id)
         return dict(entry) if entry else None
 
+    def by_email(self, email: str) -> dict[str, Any] | None:
+        """The subscription Paddle holds this email against, if any.
+
+        Case-insensitive, because Google returns a lowercased address and Paddle
+        stores whatever the customer typed. Where more than one matches, the most
+        recently updated wins: a person who resubscribed should get the live
+        record, not the lapsed one they started with.
+        """
+        if not email:
+            return None
+        want = email.strip().lower()
+        hits = [e for e in self._data.values()
+                if (e.get("email") or "").strip().lower() == want]
+        if not hits:
+            return None
+        return dict(max(hits, key=lambda e: e.get("updated_at") or 0))
+
+    def by_identity(self, sub: str) -> dict[str, Any] | None:
+        """The subscription explicitly bound to a sign-in account."""
+        if not sub:
+            return None
+        for e in self._data.values():
+            if sub in (e.get("identities") or []):
+                return dict(e)
+        return None
+
+    def link_identity(self, subscription_id: str, sub: str) -> bool:
+        """Bind a sign-in account to a subscription, permanently.
+
+        This is what rescues the case where someone pays with one address and
+        signs in with another. It is additive and idempotent: a subscription can
+        carry several accounts, which is what a person with a work and a personal
+        Google account actually needs, and re-linking changes nothing.
+        """
+        entry = self._data.get(subscription_id)
+        if entry is None or not sub:
+            return False
+        ids = entry.setdefault("identities", [])
+        if sub not in ids:
+            ids.append(sub)
+            entry["updated_at"] = time.time()
+            self._save()
+        return True
+
     def tier_of(self, subscription_id: str) -> str | None:
         return self._data.get(subscription_id, {}).get("tier")
 

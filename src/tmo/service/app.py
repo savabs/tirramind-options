@@ -18,9 +18,11 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
 from . import surface
+from ..payments import session as sess
+from ..payments.store import SubscriberStore
 from .cache import SurfaceCache
 
 logger = logging.getLogger(__name__)
@@ -31,7 +33,9 @@ DEFAULT_TTL_S = 30.0
 
 def create_app(*, builder: Callable[[str], dict[str, Any]] | None = None,
                ttl_s: float | None = None, warm: bool = True,
-               refresh_interval_s: float = 5.0) -> FastAPI:
+               refresh_interval_s: float = 5.0,
+               store: SubscriberStore | None = None,
+               session_secret: str | None = None) -> FastAPI:
     build = builder or (lambda currency: surface.build(currency))
     ttl = DEFAULT_TTL_S if ttl_s is None else ttl_s
     cache = SurfaceCache(ttl_s=ttl)
@@ -49,6 +53,9 @@ def create_app(*, builder: Callable[[str], dict[str, Any]] | None = None,
                   description="Arbitrage-checked volatility surfaces, with their residuals.",
                   version="0.1.0", lifespan=lifespan)
     app.state.cache = cache
+    app.state.store = store
+    app.state.session_secret = (os.getenv("TMO_SESSION_SECRET", "")
+                                if session_secret is None else session_secret)
 
     def key(venue: str, currency: str) -> tuple[str, str]:
         v, c = venue.lower(), currency.upper()
@@ -76,6 +83,61 @@ def create_app(*, builder: Callable[[str], dict[str, Any]] | None = None,
                 "last_error": entry.error if entry else None,
             }
         return {"ok": True, "ttl_s": cache.ttl_s, "surfaces": surfaces}
+
+    def identity_of(request: Request) -> sess.Identity:
+        """The signed-in person, or a 401 that says which part failed.
+
+        The token may arrive as the cookie the sign-in edge sets, or as a bearer
+        header for anything that is not a browser. Same token either way.
+        """
+        token = request.cookies.get("tmo_session")
+        if not token:
+            auth = request.headers.get("Authorization", "")
+            if auth.lower().startswith("bearer "):
+                token = auth[7:].strip()
+        try:
+            return sess.verify(token, app.state.session_secret)
+        except sess.SessionError as exc:
+            raise HTTPException(401, str(exc)) from exc
+
+    def subscribers() -> SubscriberStore:
+        if app.state.store is None:
+            raise HTTPException(503, "subscriber records are not available here")
+        return app.state.store
+
+    @app.get("/me")
+    def me(request: Request) -> dict[str, Any]:
+        """Who is signed in, and what they may use.
+
+        Entitlement is answered here rather than at the sign-in edge, because
+        this is where the subscriber record lives and where the rules about
+        grace windows and refunds are already written.
+        """
+        identity = identity_of(request)
+        ent = sess.entitlement_for(identity, subscribers())
+        return {"email": identity.email, "name": identity.name,
+                "session_expires_at": identity.expires_at, **ent.as_dict()}
+
+    @app.post("/link")
+    def link(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+        """Bind this sign-in account to a subscription, using the key we sent.
+
+        For the person who paid with one address and signs in with another. The
+        key is the proof: only the subscriber ever received it.
+        """
+        identity = identity_of(request)
+        store_ = subscribers()
+        key = str(body.get("api_key", "")).strip()
+        record = store_._by_api_key(key) if key else None
+        if record is None:
+            # Deliberately the same answer for an unknown key and an inactive
+            # one: distinguishing them tells someone guessing which keys exist.
+            raise HTTPException(403, "that key does not match an active subscription")
+        if not store_.is_active_key(key):
+            raise HTTPException(403, "that key does not match an active subscription")
+        store_.link_identity(record["subscription_id"], identity.sub)
+        ent = sess.entitlement_for(identity, store_)
+        return {"linked": True, "email": identity.email, **ent.as_dict()}
 
     @app.get("/surface/{venue}/{currency}")
     def get_surface(venue: str, currency: str) -> dict[str, Any]:
