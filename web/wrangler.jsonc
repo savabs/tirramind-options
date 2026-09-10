@@ -1,12 +1,33 @@
 {
-  // Sign-in for the Terminal. Identity only: this deployment never decides what
-  // anyone has paid for, so it needs no database and holds no subscriber state.
+  // Sign-in and billing for the Terminal. Identity comes from Google; the
+  // subscriber record and the Paddle webhook live here too, so a refund reaches
+  // us whether or not any other machine is up.
   "name": "tirramind-options",
   "compatibility_date": "2026-09-01",
-  "pages_build_output_dir": "public"
+  "pages_build_output_dir": "public",
+
+  // Subscriber state and the events that produced it. It lives here rather than
+  // on the box because billing that depends on one machine being up is billing
+  // that stops when that machine stops.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tirramind-options",
+      "database_id": "c27f794d-b44d-440b-8f14-4891c1648c54"
+    }
+  ],
+
+  "vars": {
+    // Which price sells which tier. Not a secret: it is a list of public price
+    // ids. A price that is not here provisions nothing, deliberately.
+    "PADDLE_MODE": "sandbox",
+    "TMO_TIER_PRICE_MAP": "pri_01m25krv12y9dmvezdhf6q8hrd:terminal,pri_01m25krva6ak3gnvjjkms621c0:terminal"
+  }
 
   // Secrets are set out of band, never in this file:
   //   wrangler pages secret put GOOGLE_CLIENT_ID     --project-name=tirramind-options
   //   wrangler pages secret put GOOGLE_CLIENT_SECRET --project-name=tirramind-options
   //   wrangler pages secret put SESSION_SECRET       --project-name=tirramind-options
+  //   wrangler pages secret put PADDLE_WEBHOOK_SECRET --project-name=tirramind-options
+  //   wrangler pages secret put PADDLE_API_KEY        --project-name=tirramind-options
 }
