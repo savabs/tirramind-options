@@ -138,6 +138,27 @@ def main(argv=None) -> int:
         print("\nPut this in .env so these prices, and only these, provision access:")
         print(f"  TMO_TIER_PRICE_MAP={mapping}")
 
+    # Paddle refuses to open any checkout, overlay or hosted, until a default
+    # payment link is set on the account. It is a dashboard-only setting and the
+    # failure is silent from the page's side, so probe for it here rather than
+    # let the next person wonder why nothing happened when they clicked.
+    if all_prices:
+        try:
+            client._call("POST", "/transactions",
+                         body={"items": [{"price_id": all_prices[0]["id"], "quantity": 1}]})
+            print("\ncheckout: a default payment link is set; checkouts can open")
+        except PaddleAPIError as exc:
+            code = (exc.body or {}).get("error", {}).get("code") if isinstance(exc.body, dict) else None
+            if code == "transaction_default_checkout_url_not_set":
+                print("\ncheckout: BLOCKED. No default payment link is set on this account,\n"
+                      "  so Paddle will not open a checkout from anywhere, and a page that\n"
+                      "  tries simply does nothing. Set it in the dashboard under\n"
+                      "  Checkout -> Default payment link. For sandbox testing,\n"
+                      "    http://localhost:8123/checkout.html\n"
+                      "  works; then run scripts/paddle_checkout.py --serve.")
+            else:
+                print(f"\ncheckout: could not tell ({exc})")
+
     dests = client.list_notification_settings()
     print(f"\nnotification destinations: {len(dests)}")
     for d in dests:

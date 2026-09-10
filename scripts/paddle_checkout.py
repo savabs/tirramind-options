@@ -2,8 +2,11 @@
 
     PYTHONPATH=src python scripts/paddle_checkout.py
 
-Writes ``local/checkout.html``, which is outside the repository. Open it in your
-own browser and pay with Paddle's sandbox test card. That is the one step in the
+Writes ``local/checkout.html``, which is outside the repository. With ``--serve``
+it also serves that directory on a fixed port, because Paddle will not open a
+checkout from a ``file://`` page: the account's default payment link names an
+approved origin, and a local file has none. Open the printed URL in your own
+browser and pay with Paddle's sandbox test card. That is the one step in the
 billing path that a script must not do: entering card details, even fake ones,
 is a person's job.
 
@@ -14,7 +17,11 @@ public repository, so the output goes to an ignored directory.
 
 from __future__ import annotations
 
+import argparse
+import functools
+import http.server
 import os
+import socketserver
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
@@ -75,7 +82,12 @@ Paddle recorded and run them through the handler.</p>
 """
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--serve", action="store_true", help="serve local/ so the overlay can open")
+    ap.add_argument("--port", type=int, default=8123)
+    a = ap.parse_args(argv)
     load_dotenv()
     cfg = PaddleConfig.from_env()
     if not cfg.client_token:
@@ -95,7 +107,21 @@ def main() -> int:
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(PAGE.format(token=cfg.client_token, inr=ids[0], usd=ids[1]))
     print(f"wrote {out}")
-    print("Open it in your own browser and pay with the sandbox test card.")
+    if not a.serve:
+        print("Run again with --serve, then open the printed URL in your own browser.")
+        return 0
+
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory="local")
+    socketserver.TCPServer.allow_reuse_address = True
+    with socketserver.TCPServer(("127.0.0.1", a.port), handler) as httpd:
+        url = f"http://localhost:{a.port}/checkout.html"
+        print(f"\nserving on {url}")
+        print("This origin must match the account's default payment link in the\n"
+              "Paddle dashboard, or the overlay will not open. Ctrl-C when done.")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nstopped")
     return 0
 
 
