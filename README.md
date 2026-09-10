@@ -9,6 +9,8 @@ before the product does.
 - `src/tmo/payments/` — Paddle billing for the Terminal subscription, and the
   webhook endpoint that provisions and revokes access.
 - `products/terminal/` — what the subscription is, and what it is not.
+- `research/` — measurements, including the negative ones. Everything here is
+  reproducible from the script beside it.
 - `src/tmo/service/` — the fit service: an arbitrage-checked surface over HTTP,
   served warm. `deploy/` puts it on a box.
 - `src/tmo/page.py` — the public Deribit tab: one self-contained HTML file that

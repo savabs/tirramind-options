@@ -1,0 +1,129 @@
+[
+ {
+  "file": "btc_00",
+  "quotes": 413,
+  "shipped_rmse": 0.646,
+  "shipped_inside": 0.8983,
+  "fixed_rmse": 0.617,
+  "fixed_inside": 0.9467,
+  "demoted": 3,
+  "demoted_dtes": [
+   21.92,
+   77.92,
+   196.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 3
+ },
+ {
+  "file": "btc_01",
+  "quotes": 413,
+  "shipped_rmse": 0.682,
+  "shipped_inside": 0.9104,
+  "fixed_rmse": 0.656,
+  "fixed_inside": 0.9492,
+  "demoted": 3,
+  "demoted_dtes": [
+   21.92,
+   77.92,
+   196.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 3
+ },
+ {
+  "file": "btc_02",
+  "quotes": 414,
+  "shipped_rmse": 0.7,
+  "shipped_inside": 0.8913,
+  "fixed_rmse": 0.674,
+  "fixed_inside": 0.9469,
+  "demoted": 3,
+  "demoted_dtes": [
+   21.92,
+   77.92,
+   196.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 3
+ },
+ {
+  "file": "btc_03",
+  "quotes": 414,
+  "shipped_rmse": 0.86,
+  "shipped_inside": 0.8744,
+  "fixed_rmse": 0.71,
+  "fixed_inside": 0.9082,
+  "demoted": 4,
+  "demoted_dtes": [
+   2.92,
+   3.92,
+   21.92,
+   77.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 4
+ },
+ {
+  "file": "btc_04",
+  "quotes": 413,
+  "shipped_rmse": 0.745,
+  "shipped_inside": 0.8983,
+  "fixed_rmse": 0.745,
+  "fixed_inside": 0.9056,
+  "demoted": 2,
+  "demoted_dtes": [
+   21.92,
+   77.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 2
+ },
+ {
+  "file": "btc_05",
+  "quotes": 413,
+  "shipped_rmse": 0.906,
+  "shipped_inside": 0.862,
+  "fixed_rmse": 0.749,
+  "fixed_inside": 0.8935,
+  "demoted": 4,
+  "demoted_dtes": [
+   2.92,
+   3.92,
+   21.92,
+   77.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 4
+ },
+ {
+  "file": "btc_06",
+  "quotes": 413,
+  "shipped_rmse": 0.718,
+  "shipped_inside": 0.8862,
+  "fixed_rmse": 0.717,
+  "fixed_inside": 0.8935,
+  "demoted": 2,
+  "demoted_dtes": [
+   21.92,
+   77.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 2
+ },
+ {
+  "file": "btc_07",
+  "quotes": 414,
+  "shipped_rmse": 0.734,
+  "shipped_inside": 0.8744,
+  "fixed_rmse": 0.734,
+  "fixed_inside": 0.8792,
+  "demoted": 2,
+  "demoted_dtes": [
+   21.92,
+   77.92
+  ],
+  "pairs_failing_in_quotes": 0,
+  "pairs_failing_as_shipped": 2
+ }
+]
