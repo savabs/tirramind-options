@@ -6,7 +6,6 @@ before the product does.
 - [`ledger/`](ledger/README.md) — the pre-registered, append-only track record.
   Live since 2026-09-10.
 - `src/tmo/` — the daily job: fetch, fit, step every registered strategy, mark.
-- `docs/` — research, specs, and the session checkpoints that carry the work.
 
 The surface engine is [voltorch](https://pypi.org/project/voltorch/):
 arbitrage-checked eSSVI with per-slice SVI refinement. Every number here ships

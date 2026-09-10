@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Working notes stay local. The objects are public; the notebook is not.
+CLAUDE.md
+docs/
+tasks/
