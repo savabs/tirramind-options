@@ -1,0 +1,26 @@
+{
+  "strategy_id": "btc-hold-context",
+  "version": 1,
+  "supersedes": null,
+  "venue": "deribit",
+  "instrument_type": "forward",
+  "base_currency": "BTC",
+  "accounting_currency": "USD",
+  "universe": {"currency": "BTC"},
+  "entry": {
+    "when": "the book is empty",
+    "structure": "buy one BTC forward, once",
+    "price_rule": "the shortest-dated forward observed in the chain, used as a spot proxy",
+    "fill_rule": "pay the forward plus the future taker fee"
+  },
+  "exit": {"never": true},
+  "sizing": {"btc": 1},
+  "hedging": {"instrument": "none"},
+  "costs": {"future_taker_fee": "0.05% of notional, paid once at entry"},
+  "marking": {
+    "schedule": "once per day at the scheduled run",
+    "price": "the shortest-dated forward",
+    "equity_definition": "cash plus position value; starts at zero, so equity is cumulative profit and loss in USD"
+  },
+  "notes": "Context, not a benchmark. A delta-hedged volatility strategy is not trying to beat long BTC, and presenting them as competitors would be dishonest. This line exists so a reader can see what the market did over the same window."
+}

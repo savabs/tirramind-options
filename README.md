@@ -1,7 +1,15 @@
 # TirraMind Options
 
-The options terminal that shows the real numbers. Bring your own broker (Dhan free API; Deribit public API), get an arbitrage-free surface per expiry, greeks with error bounds, strategy P&L with attribution that reconciles, an executable-arbitrage monitor on the live book, and your own trading edge measured with a confidence interval.
+A bring-your-own-broker options terminal, and a public track record that starts
+before the product does.
 
-Software, not advice. ₹499/month India · $19/month global · card via Paddle on tirramind.com.
+- [`ledger/`](ledger/README.md) — the pre-registered, append-only track record.
+  Live since 2026-09-10.
+- `src/tmo/` — the daily job: fetch, fit, step every registered strategy, mark.
+- `docs/` — research, specs, and the session checkpoints that carry the work.
 
-Started 2026-09-10 with ₹0. Engine: [voltorch](https://github.com/savabs/voltorch). Ledger and calibration: from tirramind.
+The surface engine is [voltorch](https://pypi.org/project/voltorch/):
+arbitrage-checked eSSVI with per-slice SVI refinement. Every number here ships
+with its error.
+
+Software only. No recommendations, no advice, no signals.

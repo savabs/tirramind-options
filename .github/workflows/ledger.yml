@@ -1,0 +1,76 @@
+# The public track record, one day at a time.
+#
+# Deribit publishes current state only. A day this does not run is a day of the
+# record that nobody can reconstruct afterwards, and a track record with holes
+# in it is not a track record. That is the entire reason this job exists and
+# the reason it runs here rather than on a laptop that can be shut or asleep.
+#
+# Re-running is safe by construction: the ledger appends by key and skips keys
+# it already holds, snapshots are content-addressed, and the day's mark row is
+# the guard that stops a second run from trading twice.
+name: ledger
+
+on:
+  schedule:
+    # 08:10 UTC daily. GitHub runs scheduled jobs best-effort and delays of an
+    # hour are normal; that is fine for a daily mark, and the strategies read
+    # the chain as they find it rather than assuming a fixed hour.
+    - cron: "10 8 * * *"
+  workflow_dispatch:
+
+# Never let two runs write the ledger at once.
+concurrency:
+  group: ledger
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Prior state, for the log
+        run: PYTHONPATH=src python -m tmo.ci_verify --as-of "$(date -u -d yesterday +%Y-%m-%d)" || true
+        continue-on-error: true
+
+      - name: Mark the day
+        # This exits 0 even when a strategy raises: failures are recorded as
+        # rows in the errors ledger, not thrown. Its exit code is therefore not
+        # evidence of anything, and the gate below is what decides.
+        run: PYTHONPATH=src python -m tmo.daily
+
+      - name: Verify rows
+        # THE gate. Fails when an active strategy produced no mark, when no fit
+        # was recorded, when our own surface violates no-arbitrage, or when the
+        # run recorded an error.
+        run: PYTHONPATH=src python -m tmo.ci_verify
+
+      - name: Commit the record
+        run: |
+          set -eu
+          if [ -z "$(git status --porcelain data)" ]; then
+            echo "nothing to commit — the day was already marked"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Scoped add: an automated job must never sweep up source edits.
+          git add data
+          git commit -q -m "ledger: $(date -u +%Y-%m-%d) [ci]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+            git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push race, retry $i"; sleep 5
+          done
+          echo "FAILED to push the record after 3 attempts"; exit 1

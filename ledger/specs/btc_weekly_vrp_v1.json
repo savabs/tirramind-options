@@ -1,0 +1,51 @@
+{
+  "strategy_id": "btc-weekly-vrp",
+  "version": 1,
+  "supersedes": null,
+  "venue": "deribit",
+  "instrument_type": "inverse_option",
+  "base_currency": "BTC",
+  "accounting_currency": "USD",
+  "universe": {
+    "currency": "BTC",
+    "require_two_sided_quote": true,
+    "require_fitted_surface_iv": true
+  },
+  "entry": {
+    "when": "no option position is open for this strategy",
+    "structure": "short at-the-money straddle",
+    "target_dte": 7,
+    "dte_window": [5, 12],
+    "expiry_rule": "the tradeable expiry whose days-to-expiry is closest to target_dte",
+    "strike_rule": "the listed strike closest to the expiry's median forward; both legs must be two-sided",
+    "fill_rule": "sell at the bid, buy at the ask; no mid fills"
+  },
+  "exit": {
+    "close_when_dte_below": 2,
+    "note": "Deribit options inside one day of expiry drop out of the live chain, so the position is closed while it is still quoted. An instrument that disappears anyway, because a run was missed, is settled at intrinsic against the shortest-dated forward and the row is flagged imputed."
+  },
+  "sizing": {
+    "contracts_per_leg": 1,
+    "note": "One contract is one BTC of inverse option. Size is fixed, never scaled by conviction, signal strength or past P&L."
+  },
+  "hedging": {
+    "instrument": "forward_of_the_position_expiry",
+    "rebalance": "once per daily run",
+    "target_delta": 0.0,
+    "band_btc": 0.05,
+    "delta_source": "our refined arbitrage-checked surface, not the venue mark"
+  },
+  "costs": {
+    "option_taker_fee": "min(0.03% of the forward, 12.5% of the option premium) per contract",
+    "future_taker_fee": "0.05% of notional",
+    "slippage": "the full quoted spread is paid on every fill",
+    "funding": "none modelled; the hedge is a dated forward, not a perpetual"
+  },
+  "marking": {
+    "schedule": "once per day at the scheduled run",
+    "price": "venue mid of bid and ask",
+    "fallback": "our surface price when a leg has no two-sided quote",
+    "equity_definition": "cash plus position value; the book starts at zero cash, so equity is cumulative profit and loss in USD"
+  },
+  "notes": "The plainest systematic option strategy that exists, pre-registered as the reference case. It uses the surface only for hedging. If the arbitrage-checked surface is worth anything, later strategies that trade on it have to beat this."
+}
