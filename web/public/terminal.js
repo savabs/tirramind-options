@@ -78,12 +78,14 @@ function drawSmile(host, tip, slice) {
       fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = v.toFixed(2); root.appendChild(t);
   }
-  const xl = svg("text", { x: (m.l + W - m.r) / 2, y: H - 3, "text-anchor": "middle",
-    fill: tok("--ink3"), "font-size": labelSize() });
-  xl.textContent = "log-moneyness  (0 = the forward)"; root.appendChild(xl);
-  const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
-    transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
-  yl.textContent = "implied volatility, %"; root.appendChild(yl);
+  if (showAxisTitles()) {
+    const xl = svg("text", { x: (m.l + W - m.r) / 2, y: H - 3, "text-anchor": "middle",
+      fill: tok("--ink3"), "font-size": labelSize() });
+    xl.textContent = "log-moneyness  (0 = the forward)"; root.appendChild(xl);
+    const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
+      transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
+    yl.textContent = "implied volatility, %"; root.appendChild(yl);
+  }
 
   const band = [];
   for (let i = 0; i < n; i++) band.push(`${X(xs[i])},${Y(slice.ask_iv[i])}`);
@@ -208,9 +210,11 @@ function drawTerm(host, tip, expiries) {
       fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = Math.round(v) + "d"; root.appendChild(t);
   }
-  const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
-    transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
-  yl.textContent = "implied volatility, %"; root.appendChild(yl);
+  if (showAxisTitles()) {
+    const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
+      transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
+    yl.textContent = "implied volatility, %"; root.appendChild(yl);
+  }
   host.appendChild(root);
 }
 
