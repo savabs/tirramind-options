@@ -328,6 +328,107 @@ function showLink() {
   };
 }
 
+// ── alerts ────────────────────────────────────────────────────────────────
+const ago = (s) => {
+  if (!s) return "never";
+  const m = Math.round((Date.now() / 1000 - s) / 60);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+};
+
+async function renderAlerts() {
+  const host = $("#alerts-panel");
+  const a = state.account;
+  if (!a || !a.signed_in) {
+    host.innerHTML = `<div class="setup">Sign in to be told when an executable
+      arbitrage appears, instead of watching a page.</div>`;
+    return;
+  }
+  if (!a.entitled) {
+    host.innerHTML = `<div class="setup">The monitor above runs every thirty
+      minutes whether anyone is looking. Alerts send it to a webhook of yours
+      when there is something to see, which is part of the paid tier.</div>`;
+    return;
+  }
+  let data;
+  try {
+    const r = await fetch("/api/alerts", { credentials: "same-origin" });
+    data = await r.json();
+    if (!r.ok) throw new Error(data.error || `http ${r.status}`);
+  } catch (e) {
+    host.innerHTML = `<div class="setup bad">${e.message}</div>`;
+    return;
+  }
+  const rows = (data.alerts || []).map((x) => `<tr>
+      <td>${x.kind.replace("_", " ")}</td>
+      <td class="mono" style="word-break:break-all">${x.url}</td>
+      <td>${x.currency || "any"}</td>
+      <td>${x.min_edge_usd ? "$" + x.min_edge_usd : "any"}</td>
+      <td>${ago(x.last_sent_at)}${x.last_error
+        ? `<div class="row-note">${x.last_error}</div>` : ""}</td>
+      <td><button class="cta" data-test="${x.id}" style="padding:3px 9px">Test</button>
+          <button class="cta" data-del="${x.id}" style="padding:3px 9px">Remove</button></td>
+    </tr>`).join("");
+
+  host.innerHTML = (data.alerts || []).length ? `<div class="scroll"><table>
+      <thead><tr><th>Kind</th><th>Webhook</th><th>Currency</th><th>Min edge</th>
+        <th>Last sent</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="setup" style="padding-top:12px" id="alerts-add"></div>`
+    : `<div class="setup" id="alerts-add"></div>`;
+
+  $("#alerts-add").innerHTML = `
+    Send an alert to a webhook when an executable arbitrage appears. The same
+    violation is reported once, not every thirty minutes, and every attempt is
+    logged whether it worked or not.
+    <div class="linkbox"><input id="al-url" placeholder="https://your-endpoint/hook"
+      autocomplete="off"><input id="al-edge" placeholder="min $" style="max-width:90px"
+      autocomplete="off"><button class="cta" id="al-add">Add</button></div>
+    <div class="msg" id="al-msg"></div>` +
+    ((data.recent_deliveries || []).length ? `<div style="margin-top:12px">
+      <div class="l" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+        color:var(--ink3)">Recent deliveries</div>` +
+      data.recent_deliveries.slice(0, 5).map((d) =>
+        `<div style="font-size:12.5px;margin-top:4px" class="${d.ok ? "ok" : "bad"}">
+          ${ago(d.sent_at)} · ${d.ok ? "delivered" : "failed"}
+          ${d.status ? "(" + d.status + ")" : ""} · ${d.items} item(s)
+          ${d.ok ? "" : "· " + d.detail}</div>`).join("") + `</div>` : "");
+
+  host.querySelectorAll("[data-del]").forEach((b) => {
+    b.onclick = async () => {
+      await fetch(`/api/alerts?id=${encodeURIComponent(b.dataset.del)}`,
+        { method: "DELETE", credentials: "same-origin" });
+      renderAlerts();
+    };
+  });
+  host.querySelectorAll("[data-test]").forEach((b) => {
+    b.onclick = async () => {
+      b.textContent = "sending…";
+      const r = await fetch(`/api/alerts/test?id=${encodeURIComponent(b.dataset.test)}`,
+        { method: "POST", credentials: "same-origin" });
+      b.textContent = r.ok ? "sent" : "failed";
+      setTimeout(renderAlerts, 900);
+    };
+  });
+  $("#al-add").onclick = async () => {
+    const msg = $("#al-msg");
+    msg.textContent = "adding…"; msg.className = "msg";
+    try {
+      const r = await fetch("/api/alerts", { method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "executable_arb", url: $("#al-url").value.trim(),
+                               min_edge_usd: Number($("#al-edge").value) || 0 }) });
+      const body = await r.json();
+      if (!r.ok) { msg.textContent = body.error; msg.className = "msg bad"; return; }
+      // Shown once, here. A secret that can be read back is a secret in a log.
+      msg.innerHTML = `Added. Your signing secret, shown once:
+        <div class="mono" style="margin-top:6px;word-break:break-all">${body.secret}</div>`;
+      msg.className = "msg ok";
+      setTimeout(renderAlerts, 6000);
+    } catch (e) {
+      msg.textContent = e.message; msg.className = "msg bad";
+    }
+  };
+}
+
 // ── positions ─────────────────────────────────────────────────────────────
 const num = (v, d = 2) => (v >= 0 ? "+" : "") + v.toFixed(d);
 
@@ -524,7 +625,8 @@ async function boot() {
   fetch("/auth/entitlement", { credentials: "same-origin" })
     .then((r) => (r.ok ? r.json() : { signed_in: false }))
     .catch(() => ({ signed_in: false }))
-    .then((a) => { state.account = a; renderAccount(); renderPositions(); resumeDeribit(); });
+    .then((a) => { state.account = a; renderAccount(); renderPositions();
+                   renderAlerts(); resumeDeribit(); });
 
   try {
     const r = await fetch("/api/surface");

@@ -7,6 +7,7 @@
  */
 
 import { store, type Surface } from "../../lib/history";
+import { fanOut } from "../../lib/fanout";
 
 interface Env { DB: D1Database; ARCHIVE_SECRET: string }
 
@@ -40,6 +41,9 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     const s = surfaces[currency];
     if (!s?.as_of || !s?.quality) continue;   // never archive a half-formed fit
     stored.push(await store(env.DB, s, body.engine ?? null));
+    // Alerts go out after the fit is safely stored, and in the background: a
+    // slow or dead receiver must not stop the archive from acknowledging.
+    ctx.waitUntil(fanOut(env.DB, s as never));
   }
   return json(200, { stored: stored.length, ids: stored });
 };
