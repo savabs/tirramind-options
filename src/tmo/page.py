@@ -441,16 +441,25 @@ __all__ = ["render"]
 
 
 def build_site(out_path: str = "site/index.html", currencies=("BTC", "ETH")) -> str:
-    """Fetch, fit and write the page. This is what the scheduled job runs."""
+    """Fetch, fit, write the page, and write the same data as JSON.
+
+    The JSON is what the Terminal reads. One fit serves both, so the page a
+    stranger sees and the surface a subscriber trades against are the same
+    numbers from the same instant, rather than two fits that happen to agree.
+    """
+    import json as _json
     import os
 
     from .service import surface
 
     payloads = {c: surface.build(c) for c in currencies}
-    html = render(payloads)
-    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    out_dir = os.path.dirname(out_path) or "."
+    os.makedirs(out_dir, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
-        fh.write(html)
+        fh.write(render(payloads))
+    with open(os.path.join(out_dir, "surface.json"), "w", encoding="utf-8") as fh:
+        _json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "surfaces": payloads}, fh, separators=(",", ":"))
     return out_path
 
 

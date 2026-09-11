@@ -54,6 +54,25 @@ def build(currency: str, *, venue: str = "deribit") -> dict[str, Any]:
             "venue_mark_iv": sl["mark_iv"],
             "our_iv": sl["ref_iv"],
         })
+    # The executable arbs, not the theoretical ones: these are priced against
+    # real bids and asks, so each row is a trade somebody could put on. The
+    # terminal shows them because nothing else in this category does.
+    executable = report.venue_violations.get("executable", {}) or {}
+    arbs = []
+    for kind, rows in executable.items():
+        for r in (rows or []):
+            edge = r.get("edge_usd", r.get("edge"))
+            arbs.append({
+                "kind": kind,
+                "expiry": _nearest(labels, float(r.get("T", 0.0))),
+                "dte": round(float(r.get("T", 0.0)) * 365.0, 2),
+                "edge_usd": round(float(edge), 2) if edge is not None else None,
+                "strikes": [k for k in (r.get("K"), r.get("K1"), r.get("K2"),
+                                        r.get("strike"), r.get("strike_lo"),
+                                        r.get("strike_hi")) if k is not None],
+            })
+    arbs.sort(key=lambda a: -(a["edge_usd"] or 0))
+
     return {
         "venue": venue,
         "currency": currency.upper(),
@@ -70,6 +89,7 @@ def build(currency: str, *, venue: str = "deribit") -> dict[str, Any]:
             "guarantee": report.refined["guarantee"],
         },
         "expiries": expiries,
+        "arbs": arbs,
     }
 
 

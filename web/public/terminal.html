@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Terminal — TirraMind Options</title>
+<meta name="description" content="An arbitrage-checked options terminal that publishes its own error.">
+<style>
+:root{
+  color-scheme: light;
+  --bg:#ffffff; --s1:#fcfcfb; --s2:#f4f3f0; --s3:#eceae5;
+  --ink:#0b0b0b; --ink2:#52514e; --ink3:#84837c;
+  --rule:#e3e2dd; --rule2:#d2d0c9;
+  --ours:#2a78d6; --venue:#eb6834; --band:#e8e7e2;
+  --good:#1a7f37; --warn:#b45309; --bad:#b42318;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  color-scheme: dark;
+  --bg:#121211; --s1:#1a1a19; --s2:#232322; --s3:#2b2b29;
+  --ink:#ffffff; --ink2:#c3c2b7; --ink3:#8e8d84;
+  --rule:#33332f; --rule2:#45453f;
+  --ours:#3987e5; --venue:#d95926; --band:#2b2b29;
+  --good:#4ac26b; --warn:#f5a524; --bad:#f97066;
+}}
+:root[data-theme=dark]{
+  color-scheme: dark;
+  --bg:#121211; --s1:#1a1a19; --s2:#232322; --s3:#2b2b29;
+  --ink:#ffffff; --ink2:#c3c2b7; --ink3:#8e8d84;
+  --rule:#33332f; --rule2:#45453f;
+  --ours:#3987e5; --venue:#d95926; --band:#2b2b29;
+  --good:#4ac26b; --warn:#f5a524; --bad:#f97066;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 ui-sans-serif,-apple-system,system-ui,"Segoe UI",sans-serif;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+header{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:18px;
+  padding:0 18px;height:52px}
+.brand{font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+.brand span{color:var(--ink3);font-weight:400}
+.ccy{display:flex;gap:2px;margin-left:4px}
+.ccy button{appearance:none;border:0;background:none;font:inherit;font-weight:600;
+  color:var(--ink3);padding:6px 12px;border-radius:7px;cursor:pointer}
+.ccy button[aria-pressed=true]{background:var(--s2);color:var(--ink)}
+.spacer{flex:1}
+.stamp{color:var(--ink3);font-size:12px;white-space:nowrap}
+.stamp b{color:var(--ink2);font-weight:500}
+.acct{display:flex;align-items:center;gap:10px;font-size:13px;white-space:nowrap}
+.pill{border:1px solid var(--rule2);border-radius:999px;padding:3px 10px;font-size:12px;
+  color:var(--ink2)}
+.pill.on{border-color:var(--good);color:var(--good)}
+a.cta,button.cta{appearance:none;text-decoration:none;border:1px solid var(--rule2);
+  background:var(--s1);color:var(--ink);font:inherit;font-size:13px;font-weight:600;
+  padding:6px 14px;border-radius:8px;cursor:pointer}
+a.cta:hover,button.cta:hover{border-color:var(--ours)}
+
+/* ── layout ──────────────────────────────────────────────────────────── */
+main{padding:18px;max-width:1400px;margin:0 auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);border-radius:10px;overflow:hidden;
+  margin-bottom:18px}
+.kpi{background:var(--s1);padding:11px 14px}
+.kpi .l{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+.kpi .v{font-size:22px;line-height:1.2;margin-top:3px;letter-spacing:-.02em}
+.kpi .s{font-size:12px;color:var(--ink2);margin-top:1px}
+.ok{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)}
+.grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:1060px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--rule);border-radius:10px;background:var(--s1);overflow:hidden}
+.card > h2{margin:0;padding:11px 14px;font-size:13px;font-weight:650;
+  border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:10px}
+.card > h2 .sub{font-weight:400;color:var(--ink3);font-size:12px}
+.card .body{padding:12px 14px}
+.pick{display:flex;gap:5px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.pick button{appearance:none;font:inherit;font-size:12px;cursor:pointer;
+  border:1px solid var(--rule);background:var(--bg);color:var(--ink2);
+  padding:3px 9px;border-radius:999px}
+.pick button[aria-pressed=true]{background:var(--ours);border-color:var(--ours);color:#fff}
+.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:var(--ink2);
+  padding:9px 14px 0}
+.legend i{display:inline-block;vertical-align:middle;margin-right:6px;box-sizing:border-box}
+.legend .ln i{width:20px;height:0;border-top:2px solid currentColor}
+.legend .dt i{width:9px;height:9px;border-radius:50%;background:currentColor}
+.legend .bd i{width:20px;height:9px;border-radius:2px;background:var(--band)}
+.chart{position:relative;padding:4px 8px 8px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.tip{position:absolute;pointer-events:none;opacity:0;transition:opacity .07s;z-index:5;
+  background:var(--bg);border:1px solid var(--rule2);border-radius:8px;padding:8px 10px;
+  font-size:12px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.18);white-space:nowrap}
+.tip b{font-weight:650}
+.tip .r{display:flex;justify-content:space-between;gap:16px}
+.tip .r i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+thead th{position:sticky;top:0;background:var(--s1);font-weight:600;color:var(--ink3);
+  font-size:11px;letter-spacing:.03em;text-transform:uppercase;text-align:right;
+  padding:8px 10px;border-bottom:1px solid var(--rule)}
+thead th:first-child{text-align:left}
+td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule)}
+td:first-child{text-align:left}
+tbody tr:hover{background:var(--s2)}
+.scroll{max-height:420px;overflow:auto}
+.edge-pos{color:var(--good)} .edge-neg{color:var(--venue)}
+.flag{margin:10px 14px 0;font-size:12.5px;color:var(--ink2);background:var(--s2);
+  border-left:2px solid var(--venue);padding:8px 11px;border-radius:0 6px 6px 0}
+.empty{padding:26px 14px;text-align:center;color:var(--ink3);font-size:13px}
+.locked{padding:18px 14px;color:var(--ink2);font-size:13px}
+.locked ul{margin:10px 0 0;padding-left:18px;color:var(--ink3)}
+.locked li{margin:3px 0}
+footer{max-width:1400px;margin:0 auto;padding:22px 18px 40px;color:var(--ink3);font-size:12px}
+footer a{color:var(--ink2)}
+.linkbox{display:flex;gap:8px;margin-top:10px}
+.linkbox input{flex:1;font:inherit;font-size:13px;padding:7px 10px;border-radius:8px;
+  border:1px solid var(--rule2);background:var(--bg);color:var(--ink)}
+.msg{font-size:12.5px;margin-top:8px}
+</style></head><body>
+
+<header>
+  <div class="brand">Terminal <span>· TirraMind Options</span></div>
+  <div class="ccy" id="ccy"></div>
+  <div class="spacer"></div>
+  <div class="stamp" id="stamp"></div>
+  <div class="acct" id="acct"><span class="pill">checking…</span></div>
+</header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2>The smile <span class="sub" id="smile-sub"></span></h2>
+        <div class="pick" id="pick"></div>
+        <p class="flag" id="fallback" hidden></p>
+        <div class="legend">
+          <span class="ln" style="color:var(--ours)"><i></i>our surface</span>
+          <span class="dt" style="color:var(--venue)"><i></i>venue mark</span>
+          <span class="bd" style="color:var(--ink2)"><i></i>bid to ask</span>
+        </div>
+        <div class="chart"><div id="smile"></div><div class="tip" id="smile-tip"></div></div>
+      </section>
+
+      <section class="card" style="margin-top:18px">
+        <h2>At the money, by maturity
+          <span class="sub">hollow = fell back to the backbone</span></h2>
+        <div class="chart"><div id="term"></div><div class="tip" id="term-tip"></div></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="card">
+        <h2>The chain <span class="sub" id="chain-sub"></span></h2>
+        <div class="scroll"><table id="chain"></table></div>
+      </section>
+
+      <section class="card" style="margin-top:18px">
+        <h2>Executable arbitrage <span class="sub">priced against real bids and asks</span></h2>
+        <div id="arbs"></div>
+      </section>
+
+      <section class="card" style="margin-top:18px">
+        <h2>Positions and attribution</h2>
+        <div class="locked">
+          Not built yet. This is where a broker's own positions will show delta,
+          gamma, vega and theta profit and loss that reconciles to what was
+          actually realised.
+          <ul>
+            <li>NSE chains through your own broker session</li>
+            <li>Greek attribution with a residual under one per cent</li>
+            <li>Your own edge, measured with a confidence interval</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Backbone is eSSVI, arbitrage-free by construction. Each expiry is refined with a
+  per-slice SVI fit, checked for butterfly arbitrage across three times the quoted
+  span and for calendar arbitrage where both neighbouring expiries are quoted;
+  beyond the quoted range the surface is extrapolation and nothing is claimed of
+  it. Where a check fails the slice falls back to the backbone and says so.
+  Implied volatilities are ours, by bisection on Black-76 against the forward.
+  <br><br>
+  Software only. Nothing here is a recommendation, a signal, or advice.
+  <a href="https://savabs.github.io/tirramind-options/">Public surface</a> ·
+  <a href="https://github.com/savabs/tirramind-options">Source</a>
+</footer>
+
+<script src="/terminal.js"></script>
+</body></html>

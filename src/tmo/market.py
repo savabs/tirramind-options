@@ -111,5 +111,12 @@ def state(currency: str, *, snapshot_root: str = store.DEFAULT_ROOT,
              "refined_inside_bid_ask": report.refined["inside_bid_ask_share"],
              "our_butterfly_violations": report.our_violations["butterfly_violations"],
              "our_calendar_violations": report.our_violations["calendar_violations"],
-             "executable_venue_arbs": len(report.venue_violations.get("executable", []))}
+             # Sum the lists, do not count the dict. The executable report is
+             # keyed by kind -- butterfly, vertical, calendar -- so len() of it
+             # is always three, and read as a violation count it claims three
+             # arbitrages on a clean book. It said exactly that on the public
+             # page for a day.
+             "executable_venue_arbs": sum(
+                 len(v or []) for v in
+                 (report.venue_violations.get("executable") or {}).values())}
     return marks, report, meta
