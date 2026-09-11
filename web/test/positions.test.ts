@@ -16,22 +16,22 @@ const surface = {
 };
 
 describe("Black-76 greeks", () => {
-  const g = greeks(100, 100, 1, 0.2, true);
+  const g = greeks(100, 100, 1, 0.2, true)!;
   it("puts an at-the-money call near a half delta", () => {
     expect(g.delta).toBeGreaterThan(0.5);
     expect(g.delta).toBeLessThan(0.56);
   });
   it("gives a put the call's delta less one", () => {
-    const p = greeks(100, 100, 1, 0.2, false);
+    const p = greeks(100, 100, 1, 0.2, false)!;
     expect(p.delta).toBeCloseTo(g.delta - 1, 12);
   });
   it("satisfies put-call parity on the forward", () => {
-    const c = greeks(100, 90, 1, 0.3, true), p = greeks(100, 90, 1, 0.3, false);
+    const c = greeks(100, 90, 1, 0.3, true)!, p = greeks(100, 90, 1, 0.3, false)!;
     expect(c.price - p.price).toBeCloseTo(100 - 90, 8);
   });
   it("prices deep in the money at its intrinsic, and deep out at nothing", () => {
-    expect(greeks(100, 1, 1, 0.2, true).price).toBeCloseTo(99, 0);
-    expect(greeks(100, 1000, 1, 0.2, true).price).toBeLessThan(0.01);
+    expect(greeks(100, 1, 1, 0.2, true)!.price).toBeCloseTo(99, 0);
+    expect(greeks(100, 1000, 1, 0.2, true)!.price).toBeLessThan(0.01);
   });
   it("makes vega and gamma positive and theta negative for a long option", () => {
     expect(g.vega).toBeGreaterThan(0);
@@ -90,7 +90,7 @@ describe("a book", () => {
     const { rows: out, totals } = analyse(rows, { BTC: surface });
     expect(out[0].ours).not.toBeNull();
     expect(out[0].ourVol).toBeCloseTo(0.502, 6);
-    expect(totals.delta).toBeCloseTo(2 * out[0].ours.delta, 12);
+    expect(totals.delta).toBeCloseTo(2 * out[0].ours!.delta, 12);
     expect(totals.vega).toBeGreaterThan(0);
   });
 

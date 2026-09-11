@@ -459,6 +459,7 @@ def build_site(out_path: str = "site/index.html", currencies=("BTC", "ETH")) -> 
         fh.write(render(payloads))
     with open(os.path.join(out_dir, "surface.json"), "w", encoding="utf-8") as fh:
         _json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "engine": f"voltorch {voltorch.__version__}",
                     "surfaces": payloads}, fh, separators=(",", ":"))
     return out_path
 

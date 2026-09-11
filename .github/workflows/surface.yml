@@ -58,6 +58,25 @@ jobs:
           sys.exit(0 if all(checks.values()) else 1)
           PY
 
+      - name: Archive this fit
+        # The page is a view of the latest fit; this keeps every fit. It runs
+        # after the gate, so a page that failed its checks is never archived,
+        # and it does not fail the job: losing one fit is a gap in a series,
+        # while failing here would stop the page from publishing at all.
+        if: env.ARCHIVE_SECRET != ''
+        env:
+          ARCHIVE_SECRET: ${{ secrets.TMO_ARCHIVE_SECRET }}
+        run: |
+          set -uo pipefail
+          code=$(curl -sS -o /tmp/archive.out -w "%{http_code}" \
+            -X POST https://tirramind-options.pages.dev/api/archive \
+            -H "Authorization: Bearer $ARCHIVE_SECRET" \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: tirramind-options-ci/1.0" \
+            --data-binary @site/surface.json) || true
+          echo "archive -> $code $(head -c 200 /tmp/archive.out)"
+          [ "$code" = "200" ] || echo "::warning::the fit was not archived"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
