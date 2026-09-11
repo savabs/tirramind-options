@@ -1,1 +1,2 @@
 {"captured_at": "2026-09-10T07:10:55+00:00", "digest": "c6c881b46311a47d", "error": null, "name": "deribit_btc", "path": "deribit_btc/2026-09-10_c6c881b46311a47d.csv.gz", "rows": 862, "source": "live", "status": "new"}
+{"captured_at": "2026-09-11T08:31:42+00:00", "digest": "5d49e058c44f8e7b", "error": null, "name": "deribit_btc", "path": "deribit_btc/2026-09-11_5d49e058c44f8e7b.csv.gz", "rows": 888, "source": "live", "status": "new"}
