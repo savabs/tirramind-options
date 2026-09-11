@@ -128,6 +128,17 @@ footer a{color:var(--ink2)}
 .linkbox input{flex:1;font:inherit;font-size:13px;padding:7px 10px;border-radius:8px;
   border:1px solid var(--rule2);background:var(--bg);color:var(--ink)}
 .msg{font-size:12.5px;margin-top:8px}
+.setup{padding:16px 14px;font-size:13px;color:var(--ink2)}
+.setup ol{margin:10px 0 0;padding-left:20px}
+.setup li{margin:4px 0}
+.setup .privacy{margin-top:12px;padding:9px 11px;background:var(--s2);border-radius:8px;
+  border-left:2px solid var(--good);color:var(--ink2);font-size:12.5px}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:1px;
+  background:var(--rule);border-bottom:1px solid var(--rule)}
+.totals div{background:var(--s1);padding:9px 12px}
+.totals .l{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink3)}
+.totals .v{font-size:17px;margin-top:2px}
+.row-note{color:var(--warn);font-size:11.5px}
 </style></head><body>
 
 <header>
@@ -174,17 +185,8 @@ footer a{color:var(--ink2)}
       </section>
 
       <section class="card" style="margin-top:18px">
-        <h2>Positions and attribution</h2>
-        <div class="locked">
-          Not built yet. This is where a broker's own positions will show delta,
-          gamma, vega and theta profit and loss that reconciles to what was
-          actually realised.
-          <ul>
-            <li>NSE chains through your own broker session</li>
-            <li>Greek attribution with a residual under one per cent</li>
-            <li>Your own edge, measured with a confidence interval</li>
-          </ul>
-        </div>
+        <h2>Your positions <span class="sub">priced on our surface, not the venue's</span></h2>
+        <div id="positions"></div>
       </section>
     </div>
   </div>
@@ -203,5 +205,5 @@ footer a{color:var(--ink2)}
   <a href="https://github.com/savabs/tirramind-options">Source</a>
 </footer>
 
-<script src="/terminal.js"></script>
+<script type="module" src="/terminal.js"></script>
 </body></html>

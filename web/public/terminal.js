@@ -7,6 +7,8 @@
  * number as ours when it came from somewhere else.
  */
 
+import { analyse, authenticate, credentials, positions } from "/positions.js";
+
 const $ = (s, r) => (r || document).querySelector(s);
 /** Colours go into the SVG as variables, never as resolved literals: a chart
  *  drawn in dark mode must not stay dark when the reader's system turns light.
@@ -326,6 +328,157 @@ function showLink() {
   };
 }
 
+// ── positions ─────────────────────────────────────────────────────────────
+const num = (v, d = 2) => (v >= 0 ? "+" : "") + v.toFixed(d);
+
+function setupForm(message) {
+  return `<div class="setup">
+    Connect a Deribit account to see your own book priced on our surface.
+    <ol>
+      <li>In Deribit, open <b>Account, then API</b>, and add a new key.</li>
+      <li>Give it <b>read-only</b> scope. Nothing here needs trade or withdraw,
+          and a key that can trade should not be pasted into any website.</li>
+      <li>Paste the client id and secret below.</li>
+    </ol>
+    <div class="privacy">Your key stays in this browser. Deribit accepts requests
+      from this page directly, so the credential is never sent to us, never
+      stored on our side, and there is no database of other people's keys to
+      lose.</div>
+    <div class="linkbox"><input id="dbt-id" placeholder="client id" autocomplete="off"></div>
+    <div class="linkbox"><input id="dbt-secret" type="password" placeholder="client secret"
+      autocomplete="off"><button class="cta" id="dbt-go">Connect</button></div>
+    <label style="display:block;margin-top:8px;font-size:12.5px">
+      <input type="checkbox" id="dbt-remember" checked> remember it in this browser</label>
+    <div class="msg ${message ? "bad" : ""}" id="dbt-msg">${message || ""}</div>
+  </div>`;
+}
+
+function renderPositions() {
+  const host = $("#positions");
+  const a = state.account;
+  if (!a || !a.signed_in) {
+    host.innerHTML = `<div class="setup">Sign in to connect a Deribit account and
+      see your own positions with delta, gamma, vega and theta from our
+      arbitrage-checked surface rather than the venue's marks.</div>`;
+    return;
+  }
+  if (!a.entitled) {
+    host.innerHTML = `<div class="setup">Your own positions, priced on our surface,
+      are part of the paid tier.
+      <ul style="margin:10px 0 0;padding-left:18px;color:var(--ink3)">
+        <li>Delta, gamma, vega and theta from an arbitrage-checked fit</li>
+        <li>Where the venue's mark sits outside its own spread, on your strikes</li>
+        <li>Your own edge, measured with a confidence interval</li>
+      </ul>
+      <div class="msg">${a.needs_link ? "Already subscribed? Link your key from the header."
+        : "The crypto surface above stays free."}</div></div>`;
+    return;
+  }
+  if (!state.deribit) {
+    host.innerHTML = setupForm(state.deribitError);
+    $("#dbt-go").onclick = connectDeribit;
+    return;
+  }
+  const { rows, totals } = state.deribit;
+  if (!rows.length) {
+    host.innerHTML = `<div class="empty">Connected, and the book is empty.</div>
+      <div class="setup"><button class="cta" id="dbt-forget">Disconnect</button></div>`;
+    $("#dbt-forget").onclick = forgetDeribit;
+    return;
+  }
+  const body = rows.map((r) => {
+    if (!r.ours) {
+      return `<tr><td class="mono">${r.name}</td><td>${r.size}</td>
+        <td colspan="5" class="row-note">${r.note}</td></tr>`;
+    }
+    const edge = r.venueVol != null && r.ourVol != null
+      ? ((r.ourVol - r.venueVol) * 100).toFixed(2) : "—";
+    return `<tr><td class="mono">${r.name}</td>
+      <td>${r.size}</td>
+      <td>${r.ourVol != null ? (r.ourVol * 100).toFixed(1) : "—"}</td>
+      <td class="${edge !== "—" && +edge >= 0 ? "edge-pos" : "edge-neg"}">${edge}</td>
+      <td>${num(r.size * r.ours.delta, 3)}</td>
+      <td>${num(r.size * r.ours.vega, 1)}</td>
+      <td>${num(r.size * r.ours.theta, 1)}</td></tr>`;
+  }).join("");
+  host.innerHTML = `
+    <div class="totals">
+      <div><div class="l">Delta</div><div class="v">${num(totals.delta, 3)}</div></div>
+      <div><div class="l">Gamma</div><div class="v">${totals.gamma.toExponential(1)}</div></div>
+      <div><div class="l">Vega</div><div class="v">${num(totals.vega, 1)}</div></div>
+      <div><div class="l">Theta / day</div><div class="v">${num(totals.theta, 1)}</div></div>
+      <div><div class="l">Open P&L</div>
+        <div class="v ${totals.pnl >= 0 ? "ok" : "bad"}">${num(totals.pnl, 4)}</div></div>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>Instrument</th><th>Size</th><th>Our vol</th><th>Diff</th>
+        <th>Delta</th><th>Vega</th><th>Theta</th></tr></thead>
+      <tbody>${body}</tbody></table></div>
+    <div class="setup" style="padding-top:12px">
+      Greeks are ours, from the fit above: delta against the forward, vega per
+      volatility point, theta per day. Profit and loss is Deribit's own, in coin.
+      <div style="margin-top:10px"><button class="cta" id="dbt-refresh">Refresh</button>
+        <button class="cta" id="dbt-forget" style="margin-left:6px">Disconnect</button></div>
+    </div>`;
+  $("#dbt-refresh").onclick = () => loadDeribit(state.deribitToken);
+  $("#dbt-forget").onclick = forgetDeribit;
+}
+
+async function connectDeribit() {
+  const msg = $("#dbt-msg");
+  const id = $("#dbt-id").value.trim(), secret = $("#dbt-secret").value.trim();
+  if (!id || !secret) { msg.textContent = "both fields are needed"; msg.className = "msg bad"; return; }
+  msg.textContent = "connecting…"; msg.className = "msg";
+  try {
+    const { token, scope } = await authenticate(id, secret);
+    // Say so rather than silently accepting a key that can move money.
+    if (/trade|wallet/.test(scope) && !/read/.test(scope.split(" ")[0] || "")) {
+      msg.innerHTML = `connected, but this key has scope <b>${scope}</b>. ` +
+        `A read-only key is enough here.`;
+      msg.className = "msg warn";
+    }
+    if ($("#dbt-remember").checked) credentials.save({ id, secret });
+    state.deribitToken = token;
+    state.deribitError = null;
+    await loadDeribit(token);
+  } catch (e) {
+    state.deribitError = e.message;
+    msg.textContent = e.message; msg.className = "msg bad";
+  }
+}
+
+async function loadDeribit(token) {
+  try {
+    const all = [];
+    for (const c of Object.keys(state.data.surfaces)) all.push(...await positions(token, c));
+    state.deribit = analyse(all, state.data.surfaces);
+    state.deribitError = null;
+  } catch (e) {
+    state.deribit = null;
+    state.deribitError = e.message;
+  }
+  renderPositions();
+}
+
+function forgetDeribit() {
+  credentials.clear();
+  state.deribit = null; state.deribitToken = null; state.deribitError = null;
+  renderPositions();
+}
+
+async function resumeDeribit() {
+  const saved = credentials.load();
+  if (!saved || !state.account?.entitled || !state.data) return;
+  try {
+    const { token } = await authenticate(saved.id, saved.secret);
+    state.deribitToken = token;
+    await loadDeribit(token);
+  } catch (e) {
+    state.deribitError = e.message + " — the saved key may have been revoked";
+    renderPositions();
+  }
+}
+
 // ── wiring ────────────────────────────────────────────────────────────────
 function render() {
   const s = state.data.surfaces[state.ccy];
@@ -362,6 +515,7 @@ function render() {
   drawTerm($("#term"), $("#term-tip"), s.expiries);
   renderChain(slice);
   renderArbs(s);
+  renderPositions();
 }
 
 async function boot() {
@@ -370,7 +524,7 @@ async function boot() {
   fetch("/auth/entitlement", { credentials: "same-origin" })
     .then((r) => (r.ok ? r.json() : { signed_in: false }))
     .catch(() => ({ signed_in: false }))
-    .then((a) => { state.account = a; renderAccount(); });
+    .then((a) => { state.account = a; renderAccount(); renderPositions(); resumeDeribit(); });
 
   try {
     const r = await fetch("/api/surface");
