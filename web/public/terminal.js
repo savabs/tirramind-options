@@ -8,16 +8,32 @@
  */
 
 const $ = (s, r) => (r || document).querySelector(s);
-const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/** Colours go into the SVG as variables, never as resolved literals: a chart
+ *  drawn in dark mode must not stay dark when the reader's system turns light.
+ *  Not named `v`: the drawing loops use that for an axis value. */
+const tok = (n) => `var(${n})`;
 const vol = (v) => (v * 100).toFixed(1);
 const pct = (v) => (v * 100).toFixed(0) + "%";
 const money = (v) => "$" + v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
 const state = { data: null, ccy: null, expiry: null, account: null };
 
+/** The charts are drawn in viewBox units and scaled to fit, so a fixed label
+ *  size becomes unreadable on a narrow screen. Scale the type instead. */
+const labelSize = () => (innerWidth < 760 ? 20 : 12);
+/** At phone width the rotated axis title collides with its own tick labels, and
+ *  the panel heading already carries the units. Drop it rather than crowd. */
+const showAxisTitles = () => innerWidth >= 760;
+
 function svg(tag, attrs) {
   const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  for (const k in attrs) {
+    const value = attrs[k];
+    // var() is not valid in a presentation attribute, only in a style. Setting
+    // fill="var(--band)" silently renders black, which is how this was found.
+    if (typeof value === "string" && value.startsWith("var(")) el.style[k] = value;
+    else el.setAttribute(k, value);
+  }
   return el;
 }
 
@@ -51,43 +67,43 @@ function drawSmile(host, tip, slice) {
   for (let i = 0; i <= 5; i++) {
     const v = y0 + ((y1 - y0) * i) / 5, y = Y(v);
     root.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: y, y2: y,
-      stroke: css("--rule"), "stroke-width": 1 }));
+      stroke: tok("--rule"), "stroke-width": 1 }));
     const t = svg("text", { x: m.l - 9, y: y + 4, "text-anchor": "end",
-      fill: css("--ink3"), "font-size": 12 });
+      fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = vol(v); root.appendChild(t);
   }
   for (let i = 0; i <= 4; i++) {
     const v = x0 + ((x1 - x0) * i) / 4;
     const t = svg("text", { x: X(v), y: H - 20, "text-anchor": "middle",
-      fill: css("--ink3"), "font-size": 12 });
+      fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = v.toFixed(2); root.appendChild(t);
   }
   const xl = svg("text", { x: (m.l + W - m.r) / 2, y: H - 3, "text-anchor": "middle",
-    fill: css("--ink3"), "font-size": 12 });
+    fill: tok("--ink3"), "font-size": labelSize() });
   xl.textContent = "log-moneyness  (0 = the forward)"; root.appendChild(xl);
-  const yl = svg("text", { "text-anchor": "middle", fill: css("--ink3"), "font-size": 12,
+  const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
     transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
   yl.textContent = "implied volatility, %"; root.appendChild(yl);
 
   const band = [];
   for (let i = 0; i < n; i++) band.push(`${X(xs[i])},${Y(slice.ask_iv[i])}`);
   for (let i = n - 1; i >= 0; i--) band.push(`${X(xs[i])},${Y(slice.bid_iv[i])}`);
-  root.appendChild(svg("polygon", { points: band.join(" "), fill: css("--band") }));
+  root.appendChild(svg("polygon", { points: band.join(" "), fill: tok("--band") }));
 
   root.appendChild(svg("path", {
     d: xs.map((k, i) => `${i ? "L" : "M"}${X(k)},${Y(slice.our_iv[i])}`).join(""),
-    fill: "none", stroke: css("--ours"), "stroke-width": 2,
+    fill: "none", stroke: tok("--ours"), "stroke-width": 2,
     "stroke-linejoin": "round", "stroke-linecap": "round" }));
 
   xs.forEach((k, i) => {
     const v = slice.venue_mark_iv[i];
     if (v === null || !Number.isFinite(v)) return;
     // A 2px ring in the surface colour keeps the dot readable where the two agree.
-    root.appendChild(svg("circle", { cx: X(k), cy: Y(v), r: 4.5, fill: css("--venue"),
-      stroke: css("--s1"), "stroke-width": 2 }));
+    root.appendChild(svg("circle", { cx: X(k), cy: Y(v), r: 4.5, fill: tok("--venue"),
+      stroke: tok("--s1"), "stroke-width": 2 }));
   });
 
-  const cross = svg("line", { y1: m.t, y2: H - m.b, stroke: css("--ink3"),
+  const cross = svg("line", { y1: m.t, y2: H - m.b, stroke: tok("--ink3"),
     "stroke-width": 1, "stroke-dasharray": "3 3", opacity: 0 });
   root.appendChild(cross);
   root.addEventListener("pointerleave", () => {
@@ -105,13 +121,13 @@ function drawSmile(host, tip, slice) {
                  || slice.venue_mark_iv[best] > slice.ask_iv[best];
     tip.innerHTML =
       `<b>strike ${Math.round(slice.strike[best]).toLocaleString()}</b>` +
-      `<div class="r"><span><i style="background:${css("--ours")}"></i>ours</span>` +
+      `<div class="r"><span><i style="background:${tok("--ours")}"></i>ours</span>` +
       `<span>${vol(slice.our_iv[best])}</span></div>` +
-      `<div class="r"><span><i style="background:${css("--venue")}"></i>venue mark</span>` +
+      `<div class="r"><span><i style="background:${tok("--venue")}"></i>venue mark</span>` +
       `<span>${vol(slice.venue_mark_iv[best])}</span></div>` +
       `<div class="r"><span>bid / ask</span><span>${vol(slice.bid_iv[best])} – ${vol(slice.ask_iv[best])}</span></div>` +
       `<div class="r"><span>difference</span><span>${diff >= 0 ? "+" : ""}${diff.toFixed(2)} vol pts</span></div>` +
-      (outside ? `<div class="r" style="color:${css("--venue")}"><span>the mark is outside the spread</span></div>` : "");
+      (outside ? `<div class="r" style="color:${tok("--venue")}"><span>the mark is outside the spread</span></div>` : "");
     tip.style.opacity = 1;
     const wrap = root.parentElement.getBoundingClientRect();
     tip.style.left = Math.min(Math.max(box.left - wrap.left + (px / W) * box.width + 14, 8),
@@ -152,19 +168,19 @@ function drawTerm(host, tip, expiries) {
   for (let i = 0; i <= 3; i++) {
     const v = y0 + ((y1 - y0) * i) / 3, y = Y(v);
     root.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: y, y2: y,
-      stroke: css("--rule"), "stroke-width": 1 }));
+      stroke: tok("--rule"), "stroke-width": 1 }));
     const t = svg("text", { x: m.l - 9, y: y + 4, "text-anchor": "end",
-      fill: css("--ink3"), "font-size": 12 });
+      fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = vol(v); root.appendChild(t);
   }
   root.appendChild(svg("path", {
     d: pts.map((p, i) => `${i ? "L" : "M"}${X(p.dte)},${Y(p.atm)}`).join(""),
-    fill: "none", stroke: css("--ours"), "stroke-width": 2,
+    fill: "none", stroke: tok("--ours"), "stroke-width": 2,
     "stroke-linejoin": "round", "stroke-linecap": "round" }));
   pts.forEach((p) => {
     const c = svg("circle", { cx: X(p.dte), cy: Y(p.atm), r: 4.5,
-      fill: p.fallback ? css("--s1") : css("--ours"),
-      stroke: p.fallback ? css("--ours") : css("--s1"),
+      fill: p.fallback ? tok("--s1") : tok("--ours"),
+      stroke: p.fallback ? tok("--ours") : tok("--s1"),
       "stroke-width": 2, style: "cursor:pointer" });
     c.addEventListener("pointerenter", () => {
       tip.innerHTML = `<b>${p.expiry}</b>` +
@@ -189,10 +205,10 @@ function drawTerm(host, tip, expiries) {
   for (let i = 0; i <= 4; i++) {
     const v = x0 + ((x1 - x0) * i) / 4;
     const t = svg("text", { x: X(v), y: H - 12, "text-anchor": "middle",
-      fill: css("--ink3"), "font-size": 12 });
+      fill: tok("--ink3"), "font-size": labelSize() });
     t.textContent = Math.round(v) + "d"; root.appendChild(t);
   }
-  const yl = svg("text", { "text-anchor": "middle", fill: css("--ink3"), "font-size": 12,
+  const yl = svg("text", { "text-anchor": "middle", fill: tok("--ink3"), "font-size": 12,
     transform: `translate(13,${(m.t + H - m.b) / 2}) rotate(-90)` });
   yl.textContent = "implied volatility, %"; root.appendChild(yl);
   host.appendChild(root);
@@ -257,7 +273,7 @@ function renderAccount() {
   const host = $("#acct");
   if (!a || !a.signed_in) {
     host.innerHTML = `<span class="pill">not signed in</span>
-      <a class="cta" href="/auth/start?next=/terminal.html">Sign in</a>`;
+      <a class="cta" href="/auth/start?next=/terminal">Sign in</a>`;
     return;
   }
   if (a.entitled) {
