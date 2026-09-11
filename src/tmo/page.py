@@ -373,9 +373,12 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
     if not payloads:
         raise ValueError("nothing to render")
     stamp = (generated_at or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC")
+    # The tab shows the underlying, because that is what a reader is looking
+    # for, and the venue beside it, because the same underlying on two venues is
+    # not the same surface.
     tabs = "".join(
-        f'<button class="tab" role="tab" data-cur="{c}" aria-selected="false">{c}'
-        f'<span class="settled">{p.get("settled_in", "")}</span></button>'
+        f'<button class="tab" role="tab" data-cur="{c}" aria-selected="false">'
+        f'{p.get("base", c)}<span class="settled">{p.get("venue", "")}</span></button>'
         for c, p in payloads.items())
     panels = []
     for c, p in payloads.items():
@@ -408,6 +411,10 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
   <h2>How wrong we are, per expiry</h2>
   <p class="note">Published because nobody else in this category publishes it. Error is the
     root-mean-square gap between our fitted volatility and the mid of the quoted spread.
+    <b>Compare venues on the error, not on the inside-the-spread share</b>: a surface cannot
+    thread a spread narrower than its own error, so that share says as much about how
+    tightly a venue quotes as about how well anything fits it. On this chain
+    {sum(1 for e in p["expiries"]):d} expiries were fitted.
     A slice marked otherwise failed a no-arbitrage check and fell back to the backbone,
     which is arbitrage-free by construction.</p>
   {_table(p)}

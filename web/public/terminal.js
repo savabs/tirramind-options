@@ -229,7 +229,8 @@ function renderKpis(s) {
     <div class="kpi"><div class="l">Our error</div><div class="v">${q.rmse_vol_pts.toFixed(2)}</div>
       <div class="s">volatility points, root mean square</div></div>
     <div class="kpi"><div class="l">Inside the spread</div><div class="v">${pct(q.inside_bid_ask)}</div>
-      <div class="s">of ${q.quotes_fitted} quotes fitted</div></div>
+      <div class="s">of ${q.quotes_fitted} quotes · compare venues on the error,
+        not on this</div></div>
     <div class="kpi"><div class="l">Our surface</div>
       <div class="v ${clean ? "ok" : "bad"}">${clean ? "arbitrage-free" : "violations"}</div>
       <div class="s">butterfly ${q.our_butterfly_violations} · calendar ${q.our_calendar_violations}</div></div>
@@ -237,7 +238,11 @@ function renderKpis(s) {
       <div class="v ${arbs ? "warn" : "ok"}">${arbs}</div>
       <div class="s">executable against bids and asks</div></div>
     <div class="kpi"><div class="l">Forward</div><div class="v">${money(s.forward_front)}</div>
-      <div class="s">front expiry</div></div>`;
+      <div class="s">front expiry</div></div>
+    <div class="kpi"><div class="l">Quoted in</div><div class="v">${s.settled_in || "—"}</div>
+      <div class="s">${s.convention === "linear" ? "already in dollars" : "in the coin, on the forward"}
+        · agrees with the venue to
+        ${(s.quality.convention_check_vol_pts ?? 0).toFixed(2)} vol pts</div></div>`;
 }
 
 function renderChain(slice) {
@@ -586,9 +591,11 @@ function render() {
   if (!s.expiries.some((e) => e.expiry === state.expiry)) state.expiry = s.expiries[0].expiry;
   const slice = s.expiries.find((e) => e.expiry === state.expiry);
 
+  // The underlying is what a reader looks for; the venue beside it matters
+  // because the same underlying on two venues is not the same surface.
   $("#ccy").innerHTML = Object.entries(state.data.surfaces).map(([c, v]) =>
-    `<button data-c="${c}" aria-pressed="${c === state.ccy}">${c}` +
-    `<span class="settled">${v.settled_in || ""}</span></button>`).join("");
+    `<button data-c="${c}" aria-pressed="${c === state.ccy}">${v.base || c}` +
+    `<span class="settled">${v.venue || ""}</span></button>`).join("");
   $("#ccy").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { state.ccy = b.dataset.c; state.expiry = null; render(); };
   });
@@ -602,6 +609,10 @@ function render() {
     (dead.length ? ` · <span class="warn">${dead.join(", ")} did not fit</span>` : "");
 
   renderKpis(s);
+  // Settlement and convention are said out loud: a price quoted in the coin and
+  // one quoted in dollars are read differently, and the check that they were not
+  // confused is a number worth showing.
+  $("#smile-sub").dataset.venue = s.venue || "";
   $("#pick").innerHTML = s.expiries.map((e) =>
     `<button data-e="${e.expiry}" aria-pressed="${e.expiry === state.expiry}">${e.expiry}</button>`).join("");
   $("#pick").querySelectorAll("button").forEach((b) => {

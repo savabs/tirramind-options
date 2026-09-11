@@ -45,16 +45,35 @@ def test_the_keys_are_unique_so_one_market_cannot_shadow_another():
     assert set(venues.BY_KEY) == set(keys)
 
 
-def test_btc_and_eth_are_the_coin_settled_book():
-    assert venues.BY_KEY["BTC"].convention == "inverse"
-    assert venues.BY_KEY["ETH"].convention == "inverse"
+def test_deribits_coin_settled_book_is_the_inverse_one():
+    assert venues.BY_KEY["deribit:BTC"].convention == "inverse"
+    assert venues.BY_KEY["deribit:ETH"].convention == "inverse"
 
 
-def test_the_usdc_markets_are_linear_and_settle_in_usdc():
-    for key in ("SOL", "XRP", "HYPE", "TRX", "AVAX"):
-        m = venues.BY_KEY[key]
-        assert m.convention == "linear"
-        assert m.settled_in == "USDC"
+def test_every_dollar_settled_book_is_linear():
+    for key in ("deribit:SOL", "deribit:XRP", "deribit:HYPE", "deribit:TRX",
+                "deribit:AVAX", "bybit:BTC", "bybit:ETH", "bybit:SOL"):
+        assert venues.BY_KEY[key].convention == "linear"
+
+
+def test_keys_are_venue_qualified_so_one_venue_cannot_shadow_another():
+    # The same underlying trades in more than one place and the surfaces are not
+    # the same surface. A bare "BTC" had Bybit quietly overwriting Deribit.
+    assert "bybit:BTC" in venues.BY_KEY and "deribit:BTC" in venues.BY_KEY
+    for m in venues.MARKETS:
+        assert m.key == f"{m.venue}:{m.base}"
+
+
+def test_bybit_symbols_are_read_or_skipped_never_guessed():
+    got = venues._bybit_symbol("BTC-30OCT26-59000-P-USDT")
+    assert got is not None
+    exp, strike, is_call = got
+    assert (exp.year, exp.month, exp.day, exp.hour) == (2026, 10, 30, 8)
+    assert strike == 59000.0 and is_call is False
+    # A wrong expiry moves every greek on that leg, so anything unreadable is
+    # skipped rather than guessed at.
+    for bad in ("nonsense", "BTC-XXOCT26-1-C-USDT", "BTC-30FOO26-1-C-USDT", "BTC-1-C"):
+        assert venues._bybit_symbol(bad) is None
 
 
 def test_a_convention_that_agrees_with_the_venue_reads_near_zero():

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+import re
 from datetime import datetime, timezone
 
 import numpy as np
@@ -30,7 +31,9 @@ import torch
 from voltorch import implied_volatility_bisect
 from voltorch.deribit import fetch_chain as fetch_inverse
 
-API = "https://www.deribit.com/api/v2/public"
+DERIBIT = "https://www.deribit.com/api/v2/public"
+BYBIT = "https://api.bybit.com/v5/market"
+API = DERIBIT   # kept for the Deribit helpers below
 UA = "tirramind-options/0.1 (+https://github.com/savabs/tirramind-options)"
 
 COLUMNS = ["instrument", "expiry", "T", "strike", "is_call", "forward", "mark_iv",
@@ -53,14 +56,20 @@ class Market:
         return f"{self.base} · {self.settled_in}"
 
 
+# Keys are venue-qualified because the same underlying trades in more than one
+# place and the surfaces are not the same surface. A bare "BTC" would have had
+# Bybit quietly overwriting Deribit.
 MARKETS: tuple[Market, ...] = (
-    Market("BTC", "deribit", "BTC", "inverse", "BTC"),
-    Market("ETH", "deribit", "ETH", "inverse", "ETH"),
-    Market("SOL", "deribit", "SOL", "linear", "USDC"),
-    Market("XRP", "deribit", "XRP", "linear", "USDC"),
-    Market("HYPE", "deribit", "HYPE", "linear", "USDC"),
-    Market("TRX", "deribit", "TRX", "linear", "USDC"),
-    Market("AVAX", "deribit", "AVAX", "linear", "USDC"),
+    Market("deribit:BTC", "deribit", "BTC", "inverse", "BTC"),
+    Market("deribit:ETH", "deribit", "ETH", "inverse", "ETH"),
+    Market("deribit:SOL", "deribit", "SOL", "linear", "USDC"),
+    Market("deribit:XRP", "deribit", "XRP", "linear", "USDC"),
+    Market("deribit:HYPE", "deribit", "HYPE", "linear", "USDC"),
+    Market("deribit:TRX", "deribit", "TRX", "linear", "USDC"),
+    Market("deribit:AVAX", "deribit", "AVAX", "linear", "USDC"),
+    Market("bybit:BTC", "bybit", "BTC", "linear", "USDT"),
+    Market("bybit:ETH", "bybit", "ETH", "linear", "USDT"),
+    Market("bybit:SOL", "bybit", "SOL", "linear", "USDT"),
 )
 
 BY_KEY = {m.key: m for m in MARKETS}
@@ -116,9 +125,15 @@ def fetch_linear(base: str, *, session: requests.Session | None = None,
     if df.empty:
         return pd.DataFrame(columns=COLUMNS)
 
-    # Linear: the quote is already in dollars. Multiplying by the forward here,
-    # which is what the inverse book needs, would overstate every price by the
-    # price of the underlying.
+    return _finish_linear(df)
+
+
+def _finish_linear(df: pd.DataFrame) -> pd.DataFrame:
+    """Shared by every linear book: the quote is already in dollars.
+
+    Multiplying by the forward here, which is what an inverse book needs, would
+    overstate every price by the price of the underlying.
+    """
     df["bid_usd"] = df["bid"]
     df["ask_usd"] = df["ask"]
     df["two_sided"] = (df["bid"].notna() & df["ask"].notna()
@@ -143,8 +158,79 @@ def fetch_linear(base: str, *, session: requests.Session | None = None,
     return df[COLUMNS].sort_values(["expiry", "strike", "is_call"]).reset_index(drop=True)
 
 
+_MONTHS = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+           "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+
+
+def _bybit_symbol(symbol: str) -> tuple[datetime, float, bool] | None:
+    """``BTC-30OCT26-59000-P-USDT`` to its expiry, strike and type.
+
+    The expiry is not in the ticker, only in the name, and Bybit settles options
+    at 08:00 UTC. A symbol that does not parse is skipped rather than guessed at:
+    a wrong expiry moves every greek on that leg.
+    """
+    parts = symbol.split("-")
+    if len(parts) < 4:
+        return None
+    _, date, strike, cp = parts[0], parts[1], parts[2], parts[3]
+    m = re.fullmatch(r"(\d{1,2})([A-Z]{3})(\d{2})", date)
+    if not m or m.group(2) not in _MONTHS:
+        return None
+    try:
+        exp = datetime(2000 + int(m.group(3)), _MONTHS[m.group(2)], int(m.group(1)),
+                       8, 0, 0, tzinfo=timezone.utc)
+        return exp, float(strike), cp.upper() == "C"
+    except ValueError:
+        return None
+
+
+def fetch_bybit(base: str, *, session: requests.Session | None = None,
+                now: datetime | None = None, min_T_days: float = 1.0) -> pd.DataFrame:
+    """Bybit's option book for one underlying.
+
+    USDT-settled and linear, so the quote is already in dollars. One request per
+    underlying returns the whole book with its own bid, ask and mark volatility,
+    which makes the convention check cheap and sharp.
+    """
+    s = session or requests.Session()
+    s.headers.setdefault("User-Agent", UA)
+    now = now or datetime.now(timezone.utc)
+    r = s.get(f"{BYBIT}/tickers", params={"category": "option", "baseCoin": base}, timeout=30)
+    r.raise_for_status()
+    body = r.json()
+    if str(body.get("retCode")) != "0":
+        raise RuntimeError(f"bybit: {body.get('retMsg')}")
+
+    rows = []
+    for t in body["result"]["list"]:
+        parsed = _bybit_symbol(t["symbol"])
+        if not parsed:
+            continue
+        exp, strike, is_call = parsed
+        T = (exp - now).total_seconds() / (365.0 * 86400)
+        if T * 365 < min_T_days:
+            continue
+        forward = float(t.get("underlyingPrice") or 0) or np.nan
+        bid = float(t["bid1Price"]) if t.get("bid1Price") else np.nan
+        ask = float(t["ask1Price"]) if t.get("ask1Price") else np.nan
+        rows.append({
+            "instrument": t["symbol"], "expiry": exp, "T": T, "strike": strike,
+            "is_call": is_call, "forward": forward,
+            "mark_iv": float(t["markIv"]) if t.get("markIv") else np.nan,
+            "bid": bid, "ask": ask,
+            "open_interest": float(t.get("openInterest") or 0),
+            "volume": float(t.get("volume24h") or 0),
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    return _finish_linear(df)
+
+
 def fetch(market: Market | str) -> pd.DataFrame:
     m = BY_KEY[market] if isinstance(market, str) else market
+    if m.venue == "bybit":
+        return fetch_bybit(m.base)
     return fetch_inverse(m.base) if m.convention == "inverse" else fetch_linear(m.base)
 
 
@@ -180,4 +266,5 @@ def verify_convention(df: pd.DataFrame, *, sample: int = 60) -> dict:
             "p90_vol_pts": float(err.quantile(0.9))}
 
 
-__all__ = ["Market", "MARKETS", "BY_KEY", "fetch", "fetch_linear", "verify_convention"]
+__all__ = ["Market", "MARKETS", "BY_KEY", "fetch", "fetch_linear", "fetch_bybit",
+           "verify_convention"]
