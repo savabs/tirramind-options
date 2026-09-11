@@ -39,22 +39,41 @@ jobs:
         run: PYTHONPATH=src python -m tmo.page site/index.html
 
       - name: Verify the page actually says something
-        # The gate. A page that rendered is not evidence; a page carrying a
-        # real surface with a real error is. An empty or error-free-looking
-        # page must fail here rather than ship.
+        # The gate. A page that rendered is not evidence. It checks the data the
+        # page carries, not the markup: the last version scraped for a hardcoded
+        # currency name and failed the moment market keys became venue-qualified,
+        # which is the gate working but for the wrong reason.
         run: |
           set -eu
           python - <<'PY'
-          import re, sys
+          import json, sys
+
+          data = json.load(open("site/surface.json", encoding="utf-8"))
+          surfaces = data.get("surfaces", {})
+          venues = {s.get("venue") for s in surfaces.values()}
           html = open("site/index.html", encoding="utf-8").read()
+
+          # A confused price convention does not raise; it publishes a surface
+          # that is wrong by the price of the underlying. This is the check that
+          # would catch it, so it is a gate and not a comment.
+          worst = max((s["quality"].get("convention_check_vol_pts", 99)
+                       for s in surfaces.values()), default=99)
+
           checks = {
-              "has both currencies": 'data-cur="BTC"' in html and 'data-cur="ETH"' in html,
-              "carries its data": "window.__SURFACES__={" in html,
-              "quotes a real error": re.search(r'class="value">\d+\.\d\d<', html) is not None,
-              "fetches nothing": not re.search(r"<script[^>]+\bsrc=", html),
+              "at least six markets": len(surfaces) >= 6,
+              "more than one venue": len(venues) >= 2,
+              "every market agrees with its venue to 1 vol pt": worst <= 1.0,
+              "the page carries its data": "window.__SURFACES__={" in html,
+              "the page quotes a real error": any(
+                  s["quality"]["rmse_vol_pts"] > 0 for s in surfaces.values()),
+              "the page fetches nothing": "<script src=" not in html,
           }
           for name, ok in checks.items():
               print(("PASS  " if ok else "FAIL  ") + name)
+          print(f"       {len(surfaces)} markets across {sorted(venues)}; "
+                f"worst convention check {worst:.2f} vol pts")
+          for k in sorted(data.get("failed", {})):
+              print(f"       did not fit: {k} -- {data['failed'][k]}")
           sys.exit(0 if all(checks.values()) else 1)
           PY
 

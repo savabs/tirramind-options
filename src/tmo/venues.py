@@ -33,6 +33,7 @@ from voltorch.deribit import fetch_chain as fetch_inverse
 
 DERIBIT = "https://www.deribit.com/api/v2/public"
 BYBIT = "https://api.bybit.com/v5/market"
+OKX = "https://www.okx.com/api/v5"
 API = DERIBIT   # kept for the Deribit helpers below
 UA = "tirramind-options/0.1 (+https://github.com/savabs/tirramind-options)"
 
@@ -227,10 +228,112 @@ def fetch_bybit(base: str, *, session: requests.Session | None = None,
     return _finish_linear(df)
 
 
+def fetch_okx(base: str, *, session: requests.Session | None = None,
+              now: datetime | None = None, min_T_days: float = 1.0) -> pd.DataFrame:
+    """OKX's option book for one underlying.
+
+    Coin-margined, so **inverse**: the quote is in the coin and becomes dollars on
+    the forward, exactly as Deribit's BTC and ETH book does. OKX publishes a
+    per-instrument forward in its option summary, which is better than deriving
+    one, so that is what is used.
+
+    Three endpoints have to be joined because no single one carries strike,
+    quotes and forward together: the instrument list for strike and expiry, the
+    tickers for the book, and the summary for the forward.
+
+    Unverified from the author's network: OKX times out from India. The loader is
+    written from the documented shapes and the convention check runs on every
+    fetch, so a wrong assumption shows up as a number rather than as a plausible
+    surface.
+    """
+    s_ = session or requests.Session()
+    s_.headers.setdefault("User-Agent", UA)
+    now = now or datetime.now(timezone.utc)
+    uly = f"{base}-USD"
+
+    def call(path: str, **params):
+        r = s_.get(f"{OKX}/{path}", params=params, timeout=30)
+        r.raise_for_status()
+        body = r.json()
+        if str(body.get("code")) not in ("0", "None"):
+            raise RuntimeError(f"okx {path}: {body.get('msg')}")
+        return body.get("data", [])
+
+    inst = {i["instId"]: i for i in call("public/instruments", instType="OPTION", uly=uly)}
+    if not inst:
+        return pd.DataFrame(columns=COLUMNS)
+    summary = {d["instId"]: d for d in call("public/opt-summary", uly=uly)}
+    tickers = call("market/tickers", instType="OPTION", uly=uly)
+
+    def num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return np.nan
+
+    rows = []
+    for t in tickers:
+        i = inst.get(t["instId"])
+        d = summary.get(t["instId"])
+        if not i or not d:
+            continue
+        exp = datetime.fromtimestamp(int(i["expTime"]) / 1000, tz=timezone.utc)
+        T = (exp - now).total_seconds() / (365.0 * 86400)
+        if T * 365 < min_T_days:
+            continue
+        forward = num(d.get("fwdPx"))
+        if not np.isfinite(forward) or forward <= 0:
+            continue
+        rows.append({
+            "instrument": t["instId"], "expiry": exp, "T": T,
+            "strike": num(i.get("stk")), "is_call": i.get("optType") == "C",
+            "forward": forward, "mark_iv": num(d.get("markVol")),
+            "bid": num(t.get("bidPx")), "ask": num(t.get("askPx")),
+            "open_interest": num(t.get("openInterest")) if t.get("openInterest") else 0.0,
+            "volume": num(t.get("vol24h")) if t.get("vol24h") else 0.0,
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    df = df[df["strike"].notna() & (df["strike"] > 0)]
+    if df.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    return _finish_inverse(df)
+
+
+def _finish_inverse(df: pd.DataFrame) -> pd.DataFrame:
+    """Shared by every coin-margined book: the quote becomes dollars on the forward."""
+    df = df.copy()
+    df["bid_usd"] = df["bid"] * df["forward"]
+    df["ask_usd"] = df["ask"] * df["forward"]
+    df["two_sided"] = (df["bid"].notna() & df["ask"].notna()
+                       & (df["bid"] > 0) & (df["ask"] > 0))
+    df["bid_iv"], df["ask_iv"] = np.nan, np.nan
+    m = df["two_sided"].values
+    if m.any():
+        F = torch.tensor(df.loc[m, "forward"].values, dtype=torch.float64)
+        K = torch.tensor(df.loc[m, "strike"].values, dtype=torch.float64)
+        T = torch.tensor(df.loc[m, "T"].values, dtype=torch.float64)
+        r = torch.zeros_like(F)
+        for col, src in (("bid_iv", "bid_usd"), ("ask_iv", "ask_usd")):
+            P = torch.tensor(df.loc[m, src].values, dtype=torch.float64)
+            ivs = np.full(int(m.sum()), np.nan)
+            for is_call in (True, False):
+                cm = torch.tensor(df.loc[m, "is_call"].values == is_call)
+                if cm.any():
+                    iv = implied_volatility_bisect(F[cm], K[cm], T[cm], r[cm], P[cm],
+                                                   is_call=is_call)
+                    ivs[cm.numpy()] = iv.detach().numpy()
+            df.loc[m, col] = ivs
+    return df[COLUMNS].sort_values(["expiry", "strike", "is_call"]).reset_index(drop=True)
+
+
 def fetch(market: Market | str) -> pd.DataFrame:
     m = BY_KEY[market] if isinstance(market, str) else market
     if m.venue == "bybit":
         return fetch_bybit(m.base)
+    if m.venue == "okx":
+        return fetch_okx(m.base)
     return fetch_inverse(m.base) if m.convention == "inverse" else fetch_linear(m.base)
 
 
@@ -267,4 +370,4 @@ def verify_convention(df: pd.DataFrame, *, sample: int = 60) -> dict:
 
 
 __all__ = ["Market", "MARKETS", "BY_KEY", "fetch", "fetch_linear", "fetch_bybit",
-           "verify_convention"]
+           "fetch_okx", "verify_convention"]
