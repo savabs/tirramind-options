@@ -64,6 +64,8 @@ header p a{color:inherit}
   color:var(--ink-3);padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;
   margin-bottom:-1px}
 .tab[aria-selected="true"]{color:var(--ink-1);border-bottom-color:var(--ours)}
+.tab .settled{font-weight:400;font-size:11px;color:var(--ink-3);margin-left:5px}
+.tabs{flex-wrap:wrap}
 .tab:focus-visible{outline:2px solid var(--ours);outline-offset:2px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1px;
   background:var(--rule);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
@@ -372,8 +374,9 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
         raise ValueError("nothing to render")
     stamp = (generated_at or datetime.now(timezone.utc)).strftime("%Y-%m-%d %H:%M UTC")
     tabs = "".join(
-        f'<button class="tab" role="tab" data-cur="{c}" aria-selected="false">{c}</button>'
-        for c in payloads)
+        f'<button class="tab" role="tab" data-cur="{c}" aria-selected="false">{c}'
+        f'<span class="settled">{p.get("settled_in", "")}</span></button>'
+        for c, p in payloads.items())
     panels = []
     for c, p in payloads.items():
         panels.append(f"""<section data-panel="{c}" hidden>
@@ -397,6 +400,11 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
       <span class="sw-dot" style="color:var(--ours)"><i></i>refined slice</span>
       <span class="sw-ring" style="color:var(--ours)"><i></i>backbone fallback</span>
     </div><div class="term"></div><div class="tip term-tip"></div></div>
+  <p class="note">Quoted in {p.get("settled_in", "?")}, so prices are
+    {"already in dollars" if p.get("convention") == "linear" else "in the coin and converted on the forward"}.
+    Our implied volatilities agree with the venue's own marks to
+    {p["quality"].get("convention_check_vol_pts", float("nan")):.2f} volatility points at the median,
+    near the money, which is how a confused convention would show up.</p>
   <h2>How wrong we are, per expiry</h2>
   <p class="note">Published because nobody else in this category publishes it. Error is the
     root-mean-square gap between our fitted volatility and the mid of the quoted spread.
@@ -440,7 +448,7 @@ def render(payloads: dict[str, dict[str, Any]], *, generated_at: datetime | None
 __all__ = ["render"]
 
 
-def build_site(out_path: str = "site/index.html", currencies=("BTC", "ETH")) -> str:
+def build_site(out_path: str = "site/index.html", currencies=None) -> str:
     """Fetch, fit, write the page, and write the same data as JSON.
 
     The JSON is what the Terminal reads. One fit serves both, so the page a
@@ -450,9 +458,22 @@ def build_site(out_path: str = "site/index.html", currencies=("BTC", "ETH")) -> 
     import json as _json
     import os
 
+    from . import venues
     from .service import surface
 
-    payloads = {c: surface.build(c) for c in currencies}
+    # Every market we fit. A market that fails is reported and skipped rather
+    # than taking the page down with it: one dead book should not hide six live
+    # ones.
+    keys = [m.key for m in venues.MARKETS] if currencies is None else list(currencies)
+    payloads, failed = {}, {}
+    for k in keys:
+        try:
+            payloads[k] = surface.build(k)
+        except Exception as exc:  # noqa: BLE001 - reported, not raised
+            failed[k] = f"{type(exc).__name__}: {exc}"
+            print(f"  {k}: FAILED {failed[k]}")
+    if not payloads:
+        raise RuntimeError(f"every market failed: {failed}")
     out_dir = os.path.dirname(out_path) or "."
     os.makedirs(out_dir, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -460,6 +481,7 @@ def build_site(out_path: str = "site/index.html", currencies=("BTC", "ETH")) -> 
     with open(os.path.join(out_dir, "surface.json"), "w", encoding="utf-8") as fh:
         _json.dump({"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                     "engine": f"voltorch {voltorch.__version__}",
+                    "failed": failed,
                     "surfaces": payloads}, fh, separators=(",", ":"))
     return out_path
 

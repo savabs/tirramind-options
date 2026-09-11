@@ -586,15 +586,20 @@ function render() {
   if (!s.expiries.some((e) => e.expiry === state.expiry)) state.expiry = s.expiries[0].expiry;
   const slice = s.expiries.find((e) => e.expiry === state.expiry);
 
-  $("#ccy").innerHTML = Object.keys(state.data.surfaces).map((c) =>
-    `<button data-c="${c}" aria-pressed="${c === state.ccy}">${c}</button>`).join("");
+  $("#ccy").innerHTML = Object.entries(state.data.surfaces).map(([c, v]) =>
+    `<button data-c="${c}" aria-pressed="${c === state.ccy}">${c}` +
+    `<span class="settled">${v.settled_in || ""}</span></button>`).join("");
   $("#ccy").querySelectorAll("button").forEach((b) => {
     b.onclick = () => { state.ccy = b.dataset.c; state.expiry = null; render(); };
   });
 
   const a = age(state.data.generated_at);
+  const dead = Object.keys(state.data.failed || {});
   $("#stamp").innerHTML = `<b>${a.text}</b> · refit every 30 min` +
-    (a.stale ? ` · <span class="warn">stale</span>` : "");
+    (a.stale ? ` · <span class="warn">stale</span>` : "") +
+    // A market that failed to fit is said out loud. Quietly showing six of
+    // seven would let a dead book look like one that does not exist.
+    (dead.length ? ` · <span class="warn">${dead.join(", ")} did not fit</span>` : "");
 
   renderKpis(s);
   $("#pick").innerHTML = s.expiries.map((e) =>

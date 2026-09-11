@@ -66,11 +66,23 @@ export function ourVol(surface, expiry, strike) {
   return null;
 }
 
-/** BTC-27JUN25-80000-C to its parts. Futures and perpetuals have no strike. */
+/**
+ * An instrument name to its parts.
+ *
+ * Two shapes, because Deribit runs two books. The coin-settled one is
+ * `BTC-18SEP26-78000-C`. The USDC one is `AVAX_USDC-12SEP26-6d5-C`, where the
+ * underlying carries its quote currency and the strike writes its decimal point
+ * as a `d`, because a dot would collide with the separator. Reading 6d5 as
+ * anything but 6.5 silently prices the wrong strike.
+ *
+ * Futures and perpetuals have no strike.
+ */
 export function parseInstrument(name) {
   const p = String(name).split("-");
-  if (p.length < 4) return { currency: p[0], kind: "future", name };
-  const [currency, date, strike, cp] = p;
+  if (p.length < 4) return { currency: String(p[0]).split("_")[0], kind: "future", name };
+  const [rawCurrency, date, rawStrike, cp] = p;
+  const currency = rawCurrency.split("_")[0];
+  const strike = rawStrike.replace(/d/i, ".");
   const m = /^(\d{1,2})([A-Z]{3})(\d{2})$/.exec(date);
   const months = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5,
                    JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };

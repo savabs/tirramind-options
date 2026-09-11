@@ -120,3 +120,29 @@ describe("a book", () => {
     expect(totals.pnl).toBeCloseTo(0.02, 12);
   });
 });
+
+describe("the USDC book's instrument names", () => {
+  it("reads the underlying out of a quote-carrying name", () => {
+    expect(parseInstrument("AVAX_USDC-12SEP26-6d5-C").currency).toBe("AVAX");
+  });
+
+  it("reads a strike whose decimal point is written as a d", () => {
+    // 6d5 is 6.5. Reading it as anything else silently prices the wrong strike.
+    expect(parseInstrument("AVAX_USDC-12SEP26-6d5-C").strike).toBe(6.5);
+    expect(parseInstrument("XRP_USDC-12SEP26-2d75-P").strike).toBe(2.75);
+  });
+
+  it("still reads a whole-number strike in the same book", () => {
+    expect(parseInstrument("SOL_USDC-12SEP26-200-C").strike).toBe(200);
+  });
+
+  it("leaves the coin-settled book exactly as it was", () => {
+    expect(parseInstrument("BTC-18SEP26-78000-C")).toMatchObject(
+      { currency: "BTC", strike: 78000, isCall: true, expiry: "2026-09-18" });
+  });
+
+  it("finds the underlying on a USDC perpetual too", () => {
+    expect(parseInstrument("SOL_USDC-PERPETUAL")).toMatchObject(
+      { currency: "SOL", kind: "future" });
+  });
+});

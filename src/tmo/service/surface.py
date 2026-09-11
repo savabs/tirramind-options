@@ -31,9 +31,9 @@ def _nearest(labels: dict[float, str], T: float) -> str:
     return labels[key]
 
 
-def build(currency: str, *, venue: str = "deribit") -> dict[str, Any]:
+def build(market_key: str) -> dict[str, Any]:
     """Fetch, fit and shape. Costs about eight seconds; call it off the hot path."""
-    marks, report, meta = market.state(currency, capture=False)
+    marks, report, meta = market.state(market_key, capture=False)
     labels = _expiry_labels(marks)
     spot = float(marks.sort_values("T")["forward"].iloc[0])
     expiries = []
@@ -74,8 +74,11 @@ def build(currency: str, *, venue: str = "deribit") -> dict[str, Any]:
     arbs.sort(key=lambda a: -(a["edge_usd"] or 0))
 
     return {
-        "venue": venue,
-        "currency": currency.upper(),
+        "venue": meta["venue"],
+        "currency": market_key,
+        "base": meta["base"],
+        "settled_in": meta["settled_in"],
+        "convention": meta["convention"],
         "as_of": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "forward_front": round(spot, 2),
         "quality": {
@@ -87,6 +90,7 @@ def build(currency: str, *, venue: str = "deribit") -> dict[str, Any]:
             "our_calendar_violations": int(meta["our_calendar_violations"]),
             "executable_venue_arbs": int(meta["executable_venue_arbs"]),
             "guarantee": report.refined["guarantee"],
+            "convention_check_vol_pts": round(float(meta["convention_check_vol_pts"]), 4),
         },
         "expiries": expiries,
         "arbs": arbs,

@@ -15,9 +15,7 @@ import pandas as pd
 import torch
 import voltorch
 from voltorch import BlackScholes, fit_chain
-from voltorch.deribit import fetch_chain
-
-from . import store
+from . import store, venues
 
 BS = BlackScholes()
 
@@ -70,9 +68,9 @@ def _ref_iv_by_instrument(chain: pd.DataFrame, report) -> pd.Series:
     return out
 
 
-def state(currency: str, *, snapshot_root: str = store.DEFAULT_ROOT,
+def state(market: str, *, snapshot_root: str = store.DEFAULT_ROOT,
           capture: bool = True) -> tuple[pd.DataFrame, object, dict]:
-    """Fetch, archive and fit one currency's chain.
+    """Fetch, archive and fit one market's chain.
 
     Returns ``(marks, report, meta)``. ``marks`` carries one row per live
     instrument with the venue's quotes, our refined IV, and greeks priced off
@@ -80,21 +78,29 @@ def state(currency: str, *, snapshot_root: str = store.DEFAULT_ROOT,
     fitted, so a fit that turns out to be wrong can be re-run against the exact
     bytes the decision was made on.
     """
-    chain = fetch_chain(currency)
+    m = venues.BY_KEY[market]
+    chain = venues.fetch(m)
     if chain.empty:
-        raise RuntimeError(f"{currency}: Deribit returned no live options")
+        raise RuntimeError(f"{market}: {m.venue} returned no live options")
+    # The convention is checked on every fetch, not once when it was written.
+    # Getting inverse and linear the wrong way round does not raise; it produces
+    # a plausible-looking surface that is wrong by the price of the underlying.
+    convention = venues.verify_convention(chain)
     # The engine version travels with the row. The published error is a
     # property of the engine as much as of the market, and a reader comparing
     # two rows months apart has no other way to know the rule changed under
     # them: 0.2.1 narrowed the calendar check and moved the error by a third.
-    meta = {"currency": currency, "engine": "voltorch", "engine_version": voltorch.__version__,
+    meta = {"currency": market, "market": market, "venue": m.venue, "base": m.base,
+            "settled_in": m.settled_in, "convention": m.convention,
+            "engine": "voltorch", "engine_version": voltorch.__version__,
+            "convention_check_vol_pts": convention["median_vol_pts"],
             "n_quotes": int(len(chain))}
     if capture:
-        path, digest, status = store.snapshot(f"deribit_{currency.lower()}", chain,
+        path, digest, status = store.snapshot(f"{m.venue}_{market.lower()}", chain,
                                               root=snapshot_root)
         meta |= {"snapshot_digest": digest, "snapshot_status": status, "snapshot_path": path}
 
-    report = fit_chain(chain, currency=currency)
+    report = fit_chain(chain, currency=market)
     marks = chain.copy()
     marks["ref_iv"] = _ref_iv_by_instrument(marks, report)
     marks["mid_usd"] = 0.5 * (marks["bid_usd"] + marks["ask_usd"])
